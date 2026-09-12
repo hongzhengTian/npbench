@@ -1,0 +1,7 @@
+# Optional, tested CPython 3.10 environment; run from an activated venv.
+-c constraints-py310.txt
+-r ../requirements.txt
+numba
+dace
+setuptools
+wheel
