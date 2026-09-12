@@ -1,0 +1,10 @@
+{
+    "framework": {
+        "simple_name": "cova_openmp_gpu",
+        "full_name": "CoVA OpenMP GPU",
+        "prefix": "cv",
+        "postfix": "cova_openmp_gpu",
+        "class": "CovaFramework",
+        "arch": "gpu"
+    }
+}

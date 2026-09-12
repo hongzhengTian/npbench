@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["A"]
+        },
         "name": "Multiresolution analysis kernel",
         "short_name": "doitgen",
         "relative_path": "polybench/doitgen",

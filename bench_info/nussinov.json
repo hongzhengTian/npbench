@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "Nussinov",
         "short_name": "nussinov",
         "relative_path": "polybench/nussinov",

@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": ["u"]
+        },
         "name": "Alternating Direction Implicit Method",
         "short_name": "adi",
         "relative_path": "polybench/adi",

@@ -1,0 +1,10 @@
+{
+    "framework": {
+        "simple_name": "cova_openmp_cpu",
+        "full_name": "CoVA OpenMP CPU",
+        "prefix": "cv",
+        "postfix": "cova_openmp_cpu",
+        "class": "CovaFramework",
+        "arch": "cpu"
+    }
+}

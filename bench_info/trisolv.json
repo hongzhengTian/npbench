@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["x"]
+        },
         "name": "Triangular solver",
         "short_name": "trisolv",
         "relative_path": "polybench/trisolv",

@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["B"]
+        },
         "name": "Triangular matrix-multiply",
         "short_name": "trmm",
         "relative_path": "polybench/trmm",

@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["A", "w", "x"]
+        },
         "name": "Vector Multiplication and Matrix Addition",
         "short_name": "gemver",
         "relative_path": "polybench/gemver",

@@ -131,3 +131,6 @@ dmypy.json
 # dace
 .dacecache/
 *.csv
+
+# CoVA generated native artifacts
+.cova_gen/

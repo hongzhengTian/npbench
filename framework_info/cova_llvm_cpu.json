@@ -1,0 +1,10 @@
+{
+    "framework": {
+        "simple_name": "cova_llvm_cpu",
+        "full_name": "CoVA LLVM CPU",
+        "prefix": "cv",
+        "postfix": "cova_llvm_cpu",
+        "class": "CovaFramework",
+        "arch": "cpu"
+    }
+}

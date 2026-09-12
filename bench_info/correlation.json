@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": ["data"]
+        },
         "name": "Correlation",
         "short_name": "correlat",
         "relative_path": "polybench/correlation",

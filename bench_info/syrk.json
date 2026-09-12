@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["C"]
+        },
         "name": "Symmetric rank-k operations",
         "short_name": "syrk",
         "relative_path": "polybench/syrk",

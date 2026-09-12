@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["ex", "ey", "hz"]
+        },
         "name": "2-D Finite Different Time Domain Kernel",
         "short_name": "fdtd_2d",
         "relative_path": "polybench/fdtd_2d",

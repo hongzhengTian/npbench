@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["A"]
+        },
         "name": "2-D Seidel stencil computation",
         "short_name": "seidel2d",
         "relative_path": "polybench/seidel_2d",

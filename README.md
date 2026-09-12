@@ -25,6 +25,7 @@ For optional Python 3.10 dependency profiles and native-library setup for NumPy,
 ## Supported Frameworks
 
 Currently, the following frameworks are supported (in alphabetical order):
+- [CoVA](cova.md) (PolyBench extension in this fork)
 - CuPy
 - DaCe
 - Dpnp

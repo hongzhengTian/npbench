@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["A", "B"]
+        },
         "name": "1-D Jacobi stencil computation",
         "short_name": "jacobi1d",
         "relative_path": "polybench/jacobi_1d",

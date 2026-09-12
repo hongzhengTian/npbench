@@ -1,0 +1,11 @@
+import numpy as np
+from cova import cova
+
+
+@cova(backend="cpu", tool="serial-cpu")
+def kernel(x1, x2, y_1, y_2, A):
+
+    x1 += A @ y_1
+    x2 += y_2 @ A
+
+    return x1, x2

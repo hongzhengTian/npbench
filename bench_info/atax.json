@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "A transpose times A times x",
         "short_name": "atax",
         "relative_path": "polybench/atax",

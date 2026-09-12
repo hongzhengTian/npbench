@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 2,
+            "writeback_args": []
+        },
         "name": "Bincojugate Gradient Method",
         "short_name": "bicg",
         "relative_path": "polybench/bicg",

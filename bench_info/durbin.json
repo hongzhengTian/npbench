@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "Toeplitz system solver",
         "short_name": "durbin",
         "relative_path": "polybench/durbin",

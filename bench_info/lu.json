@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["A"]
+        },
         "name": "LU Decomposition",
         "short_name": "lu",
         "relative_path": "polybench/lu",

@@ -1,0 +1,10 @@
+{
+    "framework": {
+        "simple_name": "cova_llvm_gpu",
+        "full_name": "CoVA LLVM GPU",
+        "prefix": "cv",
+        "postfix": "cova_llvm_gpu",
+        "class": "CovaFramework",
+        "arch": "gpu"
+    }
+}
