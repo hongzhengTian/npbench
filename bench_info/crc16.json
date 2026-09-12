@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "CRC-16",
         "short_name": "crc16",
         "relative_path": "crc16",

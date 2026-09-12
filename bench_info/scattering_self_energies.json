@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["Sigma"]
+        },
         "name": "Scattering Self Energies",
         "short_name": "sselfeng",
         "relative_path": "scattering_self_energies",

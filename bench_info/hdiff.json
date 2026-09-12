@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["out_field"]
+        },
         "name": "Horizontal Diffusion",
         "short_name": "hdiff",
         "relative_path": "weather_stencils/hdiff",

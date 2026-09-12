@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["utens_stage"]
+        },
         "name": "Vertical Advection",
         "short_name": "vadv",
         "relative_path": "weather_stencils/vadv",

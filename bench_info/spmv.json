@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "Sparse Matrix-Vector Multiplication",
         "short_name": "spmv",
         "relative_path": "spmv",

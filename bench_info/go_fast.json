@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "GoFast",
         "short_name": "npgofast",
         "relative_path": "go_fast",

@@ -59,3 +59,7 @@ class Region:
                 for name, argument in zip(self.bench.info['input_args'],
                                           self.framework.args(self.bench, self.impl))
                 if name in self.bench.info['array_args']}
+
+    def release(self):
+        """Release a completed call's host/device arrays outside measurement."""
+        self.context = None

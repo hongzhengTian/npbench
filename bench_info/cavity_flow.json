@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["u", "v", "p"]
+        },
         "name": "Cavity Flow",
         "short_name": "cavtflow",
         "relative_path": "cavity_flow",

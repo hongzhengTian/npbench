@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 2,
+            "writeback_args": []
+        },
         "name": "Contour Integral",
         "short_name": "coninteg",
         "relative_path": "contour_integral",

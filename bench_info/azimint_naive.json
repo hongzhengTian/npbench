@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "Azimuthal Integration - Naive",
         "short_name": "azimnaiv",
         "relative_path": "azimint_naive",

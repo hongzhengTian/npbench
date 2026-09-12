@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "Multi-layer Perceptron",
         "short_name": "mlp",
         "relative_path": "deep_learning/mlp",

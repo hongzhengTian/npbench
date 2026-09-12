@@ -25,6 +25,24 @@ from .region import Region
 
 
 PHASES = ('initialization', 'fresh_process', 'same_process')
+METRIC_VERSION = 2
+
+
+def _stop_worker(process):
+    """Also stop compiler descendants when a worker or its parent is stopped."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait()
 
 
 def artifact_state(root):
@@ -73,9 +91,11 @@ def worker(request_path):
         record = {key: request[key] for key in ('benchmark', 'framework', 'implementation', 'preset', 'version', 'process_index')}
         record.update(call_index=index, phase=phase, pid=os.getpid(), status='running',
                       time=None, validated=None, golden_key=event['key'],
-                      golden_producer_executions=event['producer_executions'], placement=[])
+                      golden_producer_executions=event['producer_executions'], placement=[],
+                      metric_version=METRIC_VERSION)
         (root / 'current-call.json').write_text(json.dumps(record))
         data = golden.clone_data(bundle['inputs'])
+        result = actual = None
         try:
             started = time.perf_counter()
             result = region(data)
@@ -96,6 +116,11 @@ def worker(request_path):
             record['failure_stage'] = region.stage
             record['error'] = type(error).__name__ + ': ' + str(error)
             traceback.print_exc()
+        finally:
+            # Keep the compiled callable, but not the preceding call's input,
+            # output or device buffers during the next allocation and timer.
+            region.release()
+            del data, result, actual
         _append(root / request['samples_file'], record)
         print(phase, record['status'], record['time'], flush=True)
         if record['status'] != 'passed':
@@ -120,10 +145,26 @@ def save_results(database, run_id, records):
 
 
 def run(args):
+    previous = signal.getsignal(signal.SIGTERM)
+
+    def terminate(signum, frame):
+        raise SystemExit(128 + signum)
+
+    signal.signal(signal.SIGTERM, terminate)
+    try:
+        return _run(args)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _run(args):
     bench = Benchmark(args['benchmark'])
     cache = Path(args.get('golden_cache') or '.cache/goldens').expanduser().resolve()
-    bundle, event = golden.load_or_create(bench, args['preset'], generate_framework('numpy'),
-                                          cache, required=args.get('require_golden', False))
+    _, event = golden.load_or_create(bench, args['preset'], generate_framework('numpy'),
+                                     cache, required=args.get('require_golden', False), load_values=False)
+    # Initializer data can be cached by Benchmark after a golden miss.
+    # Only workers need the actual arrays during measurements.
+    bench.bdata.clear()
     framework = generate_framework(args['framework'])
     supported = framework.fname in ('numpy', 'numba', 'cupy', 'dace_cpu', 'dace_gpu') or framework.fname.startswith('cova_')
     if not supported:
@@ -141,7 +182,8 @@ def run(args):
     package_root = str(Path(__file__).resolve().parents[2])
     env = dict(os.environ, PYTHONPATH=package_root + os.pathsep + os.environ.get('PYTHONPATH', ''))
     version = framework.version()
-    manifest = {'schema': 1, 'metric': 'host_to_host_call_wall_seconds', 'run_id': run_root.name,
+    manifest = {'schema': 1, 'metric': 'host_to_host_call_wall_seconds',
+                'metric_version': METRIC_VERSION, 'run_id': run_root.name,
                 'started_utc': datetime.now(timezone.utc).isoformat(), 'arguments': args,
                 'golden': event, 'framework_version': version, 'python': sys.version,
                 'host': os.uname().nodename,
@@ -174,12 +216,10 @@ def run(args):
                     process.wait(timeout=args['timeout'])
                 except subprocess.TimeoutExpired:
                     timed_out = True
-                    os.killpg(process.pid, signal.SIGTERM)
-                    try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        os.killpg(process.pid, signal.SIGKILL)
-                        process.wait()
+                    _stop_worker(process)
+                except BaseException:
+                    _stop_worker(process)
+                    raise
             records = [json.loads(line) for line in (cell / samples_file).read_text().splitlines()] if (cell / samples_file).exists() else []
             if process.returncode and (not records or records[-1]['status'] == 'passed'):
                 current = cell / 'current-call.json'

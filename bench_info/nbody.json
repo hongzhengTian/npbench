@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 2,
+            "writeback_args": ["pos", "vel"]
+        },
         "name": "Nbody",
         "short_name": "nbody",
         "relative_path": "nbody",

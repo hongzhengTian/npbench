@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "ResNet-50 Bottleneck Residual Block",
         "short_name": "resnet",
         "relative_path": "deep_learning/resnet",

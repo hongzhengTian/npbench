@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "Covariance2",
         "short_name": "covarian2",
         "relative_path": "polybench/covariance2",

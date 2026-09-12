@@ -17,6 +17,56 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LifecycleTest(unittest.TestCase):
+    def test_release_does_not_keep_previous_call_arrays_alive(self):
+        import weakref
+        bench = Benchmark('gemm')
+        bench.info['parameters']['unit'] = {'NI': 4, 'NJ': 3, 'NK': 2}
+        framework = generate_framework('numpy')
+        data = golden.clone_data(bench.get_data('unit'))
+        array = weakref.ref(data['A'])
+        region = Region(bench, framework, 'default', {'C'})
+        region(data)
+        del data
+        self.assertIsNotNone(array())
+        region.release()
+        self.assertIsNone(array())
+
+    def test_parent_termination_stops_its_active_worker(self):
+        import signal
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONDONTWRITEBYTECODE='1', OPENBLAS_NUM_THREADS='1')
+            command = [sys.executable, str(ROOT / 'run_benchmark.py'), '-b', 'gemm', '-f', 'numpy',
+                       '--lifecycle', '-r', '100000', '--fresh-process-runs', '0', '-t', '60',
+                       '--golden-cache', str(root / 'goldens'), '--run-dir', str(root / 'runs')]
+            process = subprocess.Popen(command, cwd=root, env=env, stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL)
+            worker_pid = None
+            try:
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline:
+                    samples = list((root / 'runs').glob('*/*/process-0.jsonl'))
+                    if samples and samples[0].stat().st_size:
+                        worker_pid = json.loads(samples[0].read_text().splitlines()[0])['pid']
+                        break
+                    self.assertIsNone(process.poll())
+                    time.sleep(0.05)
+                self.assertIsNotNone(worker_pid)
+                process.terminate()
+                self.assertEqual(process.wait(timeout=10), 128 + signal.SIGTERM)
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(worker_pid, 0)
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=10)
+                if worker_pid:
+                    try:
+                        os.killpg(worker_pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
     def test_source_preparation_does_not_execute_and_calls_return_their_own_output(self):
         bench = Benchmark('gemm')
         bench.info['parameters']['unit'] = {'NI': 4, 'NJ': 3, 'NK': 2}

@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "Conv2D with Bias",
         "short_name": "conv2d",
         "relative_path": "deep_learning/conv2d_bias",

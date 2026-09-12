@@ -140,7 +140,7 @@ def _lock(path):
             fcntl.flock(stream, fcntl.LOCK_UN)
 
 
-def load_or_create(bench, preset, numpy, cache, *, required=False):
+def load_or_create(bench, preset, numpy, cache, *, required=False, load_values=True):
     contract = identity(bench, preset, numpy)
     key = hashlib.sha256(json.dumps(contract, sort_keys=True).encode()).hexdigest()
     root = Path(cache).expanduser().resolve()
@@ -167,6 +167,9 @@ def load_or_create(bench, preset, numpy, cache, *, required=False):
                 (temporary / 'golden.json').write_text(json.dumps(metadata, indent=2) + '\n')
                 os.rename(temporary, target)
                 created = True
+                # Do not retain the producer arrays while reading the saved
+                # values back, especially for multi-gigabyte L inputs.
+                del bundle, arrays
             finally:
                 if temporary.exists():
                     shutil.rmtree(temporary)
@@ -178,8 +181,10 @@ def load_or_create(bench, preset, numpy, cache, *, required=False):
             raise ValueError('Golden structure integrity mismatch: ' + str(target))
         if digest(target / 'values.npz') != metadata['sha256']:
             raise ValueError('Golden integrity mismatch: ' + str(target))
-        with np.load(target / 'values.npz', allow_pickle=False) as arrays:
-            bundle = _unpack(metadata['structure'], arrays)
+        bundle = None
+        if load_values:
+            with np.load(target / 'values.npz', allow_pickle=False) as arrays:
+                bundle = _unpack(metadata['structure'], arrays)
     event = {'key': key, 'path': str(target), 'status': 'created' if created else 'hit',
              'producer_executions': int(created), 'sha256': metadata['sha256']}
     return bundle, event

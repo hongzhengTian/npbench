@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": ["u", "v", "p"]
+        },
         "name": "Channel Flow",
         "short_name": "chanflow",
         "relative_path": "channel_flow",

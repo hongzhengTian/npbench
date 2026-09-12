@@ -1,0 +1,11 @@
+import numpy as np
+from cova import cova
+
+
+@cova(backend="cpu", tool="llvm-cpu")
+def kernel(path):
+
+    for k in range(path.shape[0]):
+        path[:] = np.minimum(path[:], np.add.outer(path[:, k], path[k, :]))
+
+    return path

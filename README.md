@@ -25,7 +25,7 @@ For optional Python 3.10 dependency profiles and native-library setup for NumPy,
 ## Supported Frameworks
 
 Currently, the following frameworks are supported (in alphabetical order):
-- [CoVA](cova.md) (PolyBench extension in this fork)
+- [CoVA](cova.md) (six routes for every registered benchmark in this fork)
 - CuPy
 - DaCe
 - Dpnp
@@ -201,3 +201,5 @@ NPBench is a collection of scientific Python/NumPy codes from various domains th
 - Weather stencils from [gt4py](https://github.com/GridTools/gt4py)
 
 Optional [golden reuse and host-to-host lifecycle measurements](lifecycle.md) retain the native runner and keep their results separate.
+
+Use [run_large.sh](run_large.sh) for sequential, resumable L-preset collection and later CoVA-only runs; see the [collection guide](lifecycle.md#large-collection-and-later-cova-only-runs).

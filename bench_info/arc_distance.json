@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "Arc Distance",
         "short_name": "adist",
         "relative_path": "pythran/arc_distance",

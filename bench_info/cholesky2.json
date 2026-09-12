@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["A"]
+        },
         "name": "Cholesky Decomposition - version 2",
         "short_name": "cholesky2",
         "relative_path": "polybench/cholesky2",

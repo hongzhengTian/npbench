@@ -60,6 +60,9 @@ The timer covers lazy compilation or artifact loading, the decorated kernel/comp
 Input reset, golden loading, numerical comparison, artifact auditing and Python process startup/teardown are outside this timer.
 The parent records complete worker lifetime separately.
 A timed call's own output is validated directly; no extra execution is performed just to retrieve a result.
+The parent verifies the golden without retaining its arrays, and workers release each call's inputs/results after validation and before preparing the next call.
+This avoids retaining an extra workload in host/device memory during subsequent measurements.
+New observations carry `metric_version=2`; earlier development records without this field used different buffer retention and should not be pooled into this collection.
 
 Required host writebacks include declared output arguments and arrays whose final reference values differ from their inputs.
 All remaining array arguments are also audited, with read-only device-array inspection outside the timer.
@@ -106,6 +109,62 @@ CoVA placement metadata separately identifies GPU execution, CPU fallback and mi
 A failed or aborted worker stops later processes for that implementation, while other implementations can still be collected.
 No failed measurement is assigned a zero time or included as a successful sample.
 A process exit before a callable starts has no call duration.
+Stopping the lifecycle parent with SIGTERM or SIGINT also stops its active worker and compiler process group.
 
 These records support lifecycle experiments; they do not by themselves establish fair resource allocation or publication-quality performance.
 Run competing measurements sequentially with consistent hardware, thread counts, software configuration and inputs, and retain failure/device coverage when comparing results.
+
+## Large collection and later CoVA-only runs
+
+After activating the prepared [native environment](native-environment.md) and [CoVA environment](cova.md), use the root shell script:
+
+```bash
+mkdir -p .cache/large-runs
+nohup ./run_large.sh all .cache/large-runs/large-001 \
+  > .cache/large-runs/large-001.log 2>&1 &
+```
+
+`all` collects NumPy, every existing Numba variant, DaCe CPU/GPU (`fusion`, `parallel`, `auto_opt`), and CuPy before the six CoVA routes.
+`baselines` collects only those comparison frameworks.
+Other NPBench frameworks have no lifecycle adapters in this integration and are outside this script's selected matrix.
+Missing source files remain explicit `missing_source` steps rather than disappearing from the plan.
+The default is the unmodified `L` preset for all 54 registered benchmarks, not `paper`.
+
+Each successful implementation has one initialization call, three fresh-process first calls, and twenty same-process calls (five within each of four processes).
+The default CPU budget is two threads, pinned with taskset to the first two allowed CPUs, and the default visible GPU is device 0.
+Set `NPBENCH_THREADS` and `NPBENCH_CPUSET` explicitly before the first collection to choose a different fixed CPU budget and placement.
+Set `CUDA_VISIBLE_DEVICES` before starting to select another allocated GPU.
+Keep these settings for later CoVA comparisons and run on otherwise idle allocated resources.
+The script serializes its own collections but cannot reserve the machine against unrelated users/jobs.
+
+Goldens persist in `.cache/goldens` unless `NPBENCH_GOLDEN_CACHE` selects another location.
+The script bounds each golden preparation and each complete worker to 1800 seconds by default, records failures, and continues.
+The golden limit also covers loading and integrity checks; worker limits include imports, golden reads, compilation, all calls and checks in that process.
+Increase `NPBENCH_GOLDEN_TIMEOUT` or `NPBENCH_TIMEOUT` before starting if a larger budget is needed.
+Large cases may require substantial memory/storage and long reference or compilation times; no overnight completion is guaranteed.
+Timeouts, numerical failures and blocked goldens are incomplete coverage, not valid performance samples.
+
+Each result directory contains a frozen `collection.json`, `plan.tsv`, source/environment snapshots and `progress.tsv`.
+Each step keeps its exact command, exit code and logs; lifecycle steps also keep their own SQLite database, JSONL, manifests and artifacts.
+Resuming the same command and result directory verifies the recorded code/environment/resource contract and skips steps that already have an exit-code receipt, including failed steps.
+Interrupted steps without a receipt run again in a new artifact directory; their older attempts remain in the evidence with distinct run IDs.
+Use the complete run manifest and successful step status when selecting samples; do not pool incomplete attempts or failed cells into a baseline.
+Use a new result directory to retry failed steps or change code, selections or budgets.
+`NPBENCH_BENCHMARKS` and `NPBENCH_FRAMEWORKS` can select a focused subset for such a retry; `./run_large.sh --help` lists all controls.
+Results/goldens within the checkout must use an ignored directory, such as `.cache/`, to keep them out of source snapshots and commits.
+
+For a later CoVA revision, use a new result directory with the same golden cache and resource configuration:
+
+```bash
+./run_large.sh cova .cache/large-runs/cova-next
+```
+
+This mode requires golden hits and never executes the reference producers or comparison frameworks.
+Missing goldens remain blocked steps and need a separately recorded reference preparation/retry.
+The script records the current CoVA revision and working-tree changes instead of trusting a stale revision environment variable.
+
+Saved baseline samples remain usable when the workload, inputs/dtypes, observable outputs, metric version, hardware, thread/affinity policy and baseline dependency/toolchain configuration remain comparable.
+Changes to these conditions require affected baseline measurements again, even when their Python implementation files are unchanged.
+Before publication, inspect numerical/device coverage and dispersion, repeat representative baseline controls to check machine drift, and collect more independent observations where needed.
+This collection provides only one initialization observation per successful implementation; repeat independent collections if initialization itself is a publication metric.
+Preserving goldens and raw records does not make one night's timings permanently valid for every later environment.

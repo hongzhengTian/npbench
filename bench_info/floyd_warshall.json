@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["path"]
+        },
         "name": "Floyd-Warshall",
         "short_name": "floydwar",
         "relative_path": "polybench/floyd_warshall",

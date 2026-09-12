@@ -1,9 +1,11 @@
-# CoVA PolyBench integration
+# CoVA integration
 
-This fork adds CoVA implementations for 28 PolyBench workloads through NPBench's existing framework interface.
-Each workload contains six files such as `adi_cova_llvm_cpu_serial.py`, each defining one `@cova`-decorated `kernel`.
+This fork adds six CoVA routes for all 54 benchmarks registered in `bench_info/` (324 implementation files).
+Each file defines a decorated entry point with the benchmark's original function name, such as `kernel`, `hdiff`, or `lenet5`.
+Application helpers remain ordinary local functions within that file; the complete benchmark entry point is the decorated region.
 They use the public `from cova import cova` interface and do not import CoVA's benchmark harness or `run_top_*` entry points.
-The original NumPy, Numba, DaCe, CuPy, and other implementations, runner, validator, and presets remain unchanged.
+The original NumPy, Numba, DaCe, CuPy, and other implementation sources and presets remain unchanged.
+Optional golden and lifecycle runner extensions are documented in [lifecycle measurements](lifecycle.md).
 Available files describe the attempted coverage; they do not guarantee that every backend compiles, executes, or validates.
 
 ## Framework selection
@@ -17,8 +19,9 @@ Available files describe the attempted coverage; they do not guarantee that ever
 | `cova_llvm_gpu` | `gpu` | `llvm-gpu` |
 | `cova_openmp_gpu` | `gpu` | `openmp-gpu` |
 
-The workloads are `adi`, `atax`, `bicg`, `cholesky`, `correlation`, `covariance`, `doitgen`, `durbin`, `fdtd_2d`, `gemm`, `gemver`, `gesummv`, `gramschmidt`, `heat_3d`, `jacobi_1d`, `jacobi_2d`, `k2mm`, `k3mm`, `lu`, `ludcmp`, `mvt`, `nussinov`, `seidel_2d`, `symm`, `syr2k`, `syrk`, `trisolv`, and `trmm`.
-Other NPBench workloads have no CoVA implementations in this integration.
+Coverage includes the original 28 PolyBench integrations plus the remaining PolyBench variants, deep-learning operators and networks, weather stencils, fluid simulations, N-body, sparse algebra, FFT, complex-valued calculations, and other numerical benchmarks.
+Use the names of the JSON files in `bench_info/` with `-b`; every registered benchmark has the six routes above.
+Source availability is attempted coverage, not a backend support claim.
 
 ## Environment
 
@@ -86,11 +89,15 @@ The framework checks the output count and writeback shapes/dtypes, copies the up
 For example, GEMM returns `C` from its decorated kernel and declares zero reference returns plus writeback to `C`; NPBench observes an in-place update and a `None` return.
 This protocol also covers updates missing from upstream `output_args`, such as `doitgen.A` and `trisolv.x`, without modifying the original validation declarations.
 
-The implementations were adapted from CoVA revision `3727be5e2848befa897531cc31b894e9382d69d2`.
+The original 28 PolyBench implementations were adapted from CoVA revision `3727be5e2848befa897531cc31b894e9382d69d2`.
 The computational bodies match this NPBench checkout, with Nussinov's small `match` helper inlined to retain one kernel per file.
 ADI deliberately uses NPBench's `b = 1.0 + mul2` coefficient, which differs from CoVA's existing canonical PolyBench version (`mul1`).
 This choice follows the local reference implementation and is not a correction of upstream ADI.
-CoVA's main repository and existing PolyBench implementations are unchanged.
+The additional 26 benchmarks are adapted directly from the corresponding NumPy implementations in NPBench revision `9928d4978a4259fb0c659ebf006d1172719c6346`.
+Their computational bodies, local helpers, constants, default arguments and source attribution are retained; only the public decorator and explicit writeback returns are added.
+This includes writebacks omitted by upstream output declarations, notably N-body `pos`/`vel` and scattering self-energies `Sigma`.
+Operations outside CoVA's supported subset remain visible compilation/execution failures; these implementations do not call the NumPy reference as a fallback.
+CoVA's main repository and the existing 28 PolyBench integrations are unchanged.
 
 ## Validation and timing limits
 
@@ -107,10 +114,10 @@ Retain compilation, execution, numerical, device-fallback, and timeout observati
 Run the focused protocol and source-adaptation tests without compiling CoVA:
 
 ```bash
-python -m unittest discover -s tests -p test_cova.py -v
+python -m unittest discover -s tests -p 'test_cova*.py' -v
 ```
 
-These tests compare small Python executions of all transplanted kernels with the independent NPBench NumPy implementations and check adapter rejection/writeback behavior.
+These tests check discovery and decorator contracts across the complete catalog, compare small Python executions of the PolyBench kernels and representative additional applications with the NPBench NumPy implementations, and check adapter rejection/writeback behavior.
 They do not establish native compiler or GPU support; native S-preset runs and their device evidence remain separate.
 
 For persistent inputs/reference outputs and initialization, fresh-process and same-process timing, see [lifecycle measurements](lifecycle.md).

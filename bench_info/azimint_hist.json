@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
         "name": "Azimuthal Integration - Histogram",
         "short_name": "azimhist",
         "relative_path": "azimint_hist",

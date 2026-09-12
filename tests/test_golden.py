@@ -31,6 +31,17 @@ class GoldenTest(unittest.TestCase):
             np.testing.assert_array_equal(bundle['inputs'][name], again['inputs'][name])
         self.assertTrue(golden.validate(self.bench, bundle, again))
 
+    def test_metadata_only_hit_checks_integrity_without_loading_arrays(self):
+        _, first = self.get()
+        with patch.object(golden.np, 'load', side_effect=AssertionError('arrays loaded')):
+            bundle, hit = self.get(required=True, load_values=False)
+        self.assertIsNone(bundle)
+        self.assertEqual(hit['key'], first['key'])
+        self.assertEqual(hit['producer_executions'], 0)
+        (Path(hit['path']) / 'values.npz').write_bytes(b'corrupt')
+        with self.assertRaisesRegex(ValueError, 'integrity'):
+            self.get(required=True, load_values=False)
+
     def test_policy_and_competitor_metadata_do_not_regenerate_values(self):
         bundle, event = self.get()
         self.bench.info['rtol'] = 0

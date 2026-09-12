@@ -1,5 +1,9 @@
 {
     "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": ["y"]
+        },
         "name": "Stockham FFT",
         "short_name": "sthamfft",
         "relative_path": "stockham_fft",

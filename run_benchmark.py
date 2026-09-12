@@ -60,7 +60,7 @@ if __name__ == "__main__":
         from npbench.infrastructure.golden import load_or_create
         import json
         _, event = load_or_create(Benchmark(args['benchmark']), args['preset'], generate_framework('numpy'),
-                                  args['golden_cache'] or '.cache/goldens', required=args['require_golden'])
+                                  args['golden_cache'] or '.cache/goldens', required=args['require_golden'], load_values=False)
         print(json.dumps(event, indent=2))
         raise SystemExit(0)
     if args['lifecycle']:
