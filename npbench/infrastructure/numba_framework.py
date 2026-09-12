@@ -41,6 +41,22 @@ class NumbaFramework(Framework):
             implementations.append((pymod_path, impl_name))
         return implementations
 
+    def implementation_names(self, bench):
+        return [label for source, label in self.impl_files(bench) if source.is_file()]
+
+    def artifact_policy(self, implementation):
+        return 'numba_disk_cache' if hasattr(implementation, 'enable_caching') else 'python'
+
+    def load_implementation(self, bench, label, *, restore=False):
+        module = 'npbench.benchmarks.' + bench.info['relative_path'].replace('/', '.')
+        module += '.' + bench.info['module_name'] + '_' + self.info['postfix'] + '_' + _impl[label]
+        implementation = getattr(importlib.import_module(module), bench.info['func_name'])
+        # The optional lifecycle mode enables the dispatcher's supported disk
+        # cache without changing the upstream algorithm or JIT options.
+        if hasattr(implementation, 'enable_caching'):
+            implementation.enable_caching()
+        return implementation
+
     def implementations(self, bench: Benchmark) -> Sequence[Tuple[Callable, str]]:
         """ Returns the framework's implementations for a particular benchmark.
         :param bench: A benchmark.

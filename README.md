@@ -199,3 +199,5 @@ NPBench is a collection of scientific Python/NumPy codes from various domains th
 - Pythran [benchmarks](https://github.com/serge-sans-paille/numpy-benchmarks/)
 - [Stockham-FFT](http://urn.kb.se/resolve?urn=urn:nbn:se:kth:diva-287731)
 - Weather stencils from [gt4py](https://github.com/GridTools/gt4py)
+
+Optional [golden reuse and host-to-host lifecycle measurements](lifecycle.md) retain the native runner and keep their results separate.

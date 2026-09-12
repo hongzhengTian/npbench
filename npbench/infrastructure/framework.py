@@ -86,6 +86,25 @@ class Framework(object):
 
         return [(ldict['impl'], 'default')]
 
+    def implementation_names(self, bench):
+        """Discover labels without compiling or executing a kernel."""
+        return [label for _, label in self.impl_files(bench)]
+
+    def load_implementation(self, bench, label, *, restore=False):
+        implementations = dict((name, impl) for impl, name in self.implementations(bench))
+        if label not in implementations:
+            raise RuntimeError("Implementation could not be loaded: " + label)
+        return implementations[label]
+
+    def artifact_policy(self, implementation):
+        return 'none' if self.fname == 'numpy' else 'native'
+
+    def uses_device_arrays(self):
+        return False
+
+    def synchronize(self):
+        pass
+
     def args(self, bench: Benchmark, impl: Callable = None):
         """ Generates the input arguments that should be used for calling
         the benchmark implementation.

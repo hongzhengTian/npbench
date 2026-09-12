@@ -112,3 +112,5 @@ python -m unittest discover -s tests -p test_cova.py -v
 
 These tests compare small Python executions of all transplanted kernels with the independent NPBench NumPy implementations and check adapter rejection/writeback behavior.
 They do not establish native compiler or GPU support; native S-preset runs and their device evidence remain separate.
+
+For persistent inputs/reference outputs and initialization, fresh-process and same-process timing, see [lifecycle measurements](lifecycle.md).

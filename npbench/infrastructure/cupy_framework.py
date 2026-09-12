@@ -23,6 +23,17 @@ class CupyFramework(Framework):
         import cupy
         return {'cpstream': cupy.cuda.stream}
 
+    def artifact_policy(self, implementation):
+        # Pure library calls may need no generated kernel cache entry.
+        return 'library_cache'
+
+    def uses_device_arrays(self):
+        return True
+
+    def synchronize(self):
+        import cupy
+        cupy.cuda.get_current_stream().synchronize()
+
     def copy_func(self) -> Callable:
         """ Returns the copy-method that should be used 
         for copying the benchmark arguments. """

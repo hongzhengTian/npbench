@@ -12,6 +12,7 @@ class Test(object):
         self.bench = bench
         self.frmwrk = frmwrk
         self.numpy = npfrmwrk
+        self.golden_bundle = None
 
     def _execute(self, frmwrk: Framework, impl: Callable, impl_name: str, mode: str, bdata: Dict[str, Any], repeat: int,
                  ignore_errors: bool) -> Tuple[Any, Sequence[float]]:
@@ -43,14 +44,17 @@ class Test(object):
                 out = [out]
         else:
             out = []
-        if "output_args" in self.bench.info.keys():
+        if self.golden_bundle is not None:
+            out += [ldict[name] for name in frmwrk.mutable_args(self.bench)]
+        elif "output_args" in self.bench.info.keys():
             num_return_args = len(out)
             num_output_args = len(self.bench.info["output_args"])
             out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
             assert len(out) == num_return_args + num_output_args, "Number of output arguments does not match."
         return out, timelist
 
-    def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = True):
+    def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = True, *,
+            golden_cache=None, require_golden=False):
         """ Tests the framework against the benchmark.
         :param preset: The preset to use for testing (S, M, L, paper).
         :param validate: If true, it validates the output against NumPy.
@@ -60,10 +64,20 @@ class Test(object):
                                                                            f=self.frmwrk.info["full_name"],
                                                                            p=preset))
 
-        bdata = self.bench.get_data(preset)
+        self.golden_bundle = None
+        if golden_cache:
+            from . import golden
+            self.golden_bundle, event = golden.load_or_create(
+                self.bench, preset, self.numpy, golden_cache, required=require_golden)
+            print('Golden:', event)
+            bdata = golden.clone_data(self.golden_bundle['inputs'])
+        else:
+            bdata = self.bench.get_data(preset)
 
         # Run NumPy for validation
-        if validate and self.frmwrk.fname != "numpy" and self.numpy:
+        if self.golden_bundle is not None:
+            np_out = self.golden_bundle['returns'] + list(self.golden_bundle['arrays'].values())
+        elif validate and self.frmwrk.fname != "numpy" and self.numpy:
             np_impl, np_impl_name = self.numpy.implementations(self.bench)[0]
             np_out, _ = self._execute(self.numpy, np_impl, np_impl_name, "validation", bdata, 1, ignore_errors)
         else:
@@ -101,7 +115,7 @@ class Test(object):
                 continue
 
             # Validation
-            valid = True
+            valid = None if self.golden_bundle is not None and not validate else True
             if validate and np_out is not None:
                 try:
                     if isinstance(frmwrk_out, (tuple, list)):
@@ -115,12 +129,22 @@ class Test(object):
                     rtol = 1e-5 if not 'rtol' in self.bench.info else self.bench.info['rtol']
                     atol = 1e-8 if not 'atol' in self.bench.info else self.bench.info['atol']
                     norm_error = 1e-5 if not 'norm_error' in self.bench.info else self.bench.info['norm_error']
-                    valid = util.validate(np_out, frmwrk_out, frmwrk_name, rtol=rtol, atol=atol, norm_error=norm_error)
+                    if self.golden_bundle is not None:
+                        from .region import to_host
+                        count = len(self.golden_bundle['returns'])
+                        actual = {'returns': [to_host(v) for v in frmwrk_out[:count]],
+                                  'arrays': dict(zip(self.bench.info['array_args'],
+                                                     [to_host(v) for v in frmwrk_out[count:]]))}
+                        valid = len(frmwrk_out) == len(np_out) and golden.validate(self.bench, self.golden_bundle, actual)
+                    else:
+                        valid = util.validate(np_out, frmwrk_out, frmwrk_name, rtol=rtol, atol=atol, norm_error=norm_error)
                     if valid:
                         print("{} - {} - validation: SUCCESS".format(frmwrk_name, impl_name))
                     elif not ignore_errors:
                         raise ValueError("{} did not validate!".format(frmwrk_name))
                 except Exception:
+                    if self.golden_bundle is not None:
+                        valid = False
                     print("Failed to run {} validation.".format(self.frmwrk.info["full_name"]))
                     if not ignore_errors:
                         raise
