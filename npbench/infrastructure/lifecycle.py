@@ -26,6 +26,7 @@ from .region import Region
 
 PHASES = ('initialization', 'fresh_process', 'same_process')
 METRIC_VERSION = 2
+PROTOCOL_VERSION = 3
 
 
 def _stop_worker(process):
@@ -84,15 +85,18 @@ def worker(request_path):
         name for name, value in bundle['arrays'].items()
         if not np.array_equal(value, bundle['inputs'][name])}
     before = artifact_state(root)
+    if request.get('expected_artifacts') is not None and before != request['expected_artifacts']:
+        raise ValueError('Artifact integrity changed between processes')
     region = Region(bench, framework, request['implementation'], writebacks,
-                    restore=request['process_index'] > 0, artifacts_available=bool(before))
+                    restore=request['process_index'] > 0, artifacts_available=bool(before),
+                    scalar_returns=tuple(np.ndim(value) == 0 for value in bundle['returns']))
     for index in range(request['repeat'] + 1):
         phase = ('initialization' if request['process_index'] == 0 else 'fresh_process') if index == 0 else 'same_process'
         record = {key: request[key] for key in ('benchmark', 'framework', 'implementation', 'preset', 'version', 'process_index')}
         record.update(call_index=index, phase=phase, pid=os.getpid(), status='running',
                       time=None, validated=None, golden_key=event['key'],
                       golden_producer_executions=event['producer_executions'], placement=[],
-                      metric_version=METRIC_VERSION)
+                      metric_version=METRIC_VERSION, protocol_version=PROTOCOL_VERSION)
         (root / 'current-call.json').write_text(json.dumps(record))
         data = golden.clone_data(bundle['inputs'])
         result = actual = None
@@ -101,19 +105,21 @@ def worker(request_path):
             result = region(data)
             record['time'] = time.perf_counter() - started
             actual = {'returns': result, 'arrays': region.observe_arrays(data)}
-            record['validated'] = golden.validate(bench, bundle, actual) if request['validate'] else None
+            record['validation_failures'] = []
+            record['validated'] = golden.validate(bench, bundle, actual,
+                                                   diagnostics=record['validation_failures']) if request['validate'] else None
             record['status'] = 'validation_failed' if record['validated'] is False else 'passed'
             record['placement'] = placement(root)
             record['artifact_policy'] = framework.artifact_policy(region.impl)
             after = artifact_state(root)
             record['artifacts'] = {'before': before, 'after': after,
                                    'state': 'unchanged' if before and before == after else 'changed' if after else 'none'}
-            if record['status'] == 'passed' and phase != 'initialization' and record['artifact_policy'] not in ('none', 'python') and before != after:
+            if record['status'] == 'passed' and phase != 'initialization' and record['artifact_policy'] not in ('none', 'python', 'numba_memory_only') and before != after:
                 record['status'] = 'artifact_reuse_failed'
             before = after
         except Exception as error:
             record['status'] = 'error'
-            record['failure_stage'] = region.stage
+            record['failure_stage'] = getattr(error, 'failure_stage', region.stage)
             record['error'] = type(error).__name__ + ': ' + str(error)
             traceback.print_exc()
         finally:
@@ -183,13 +189,13 @@ def _run(args):
     env = dict(os.environ, PYTHONPATH=package_root + os.pathsep + os.environ.get('PYTHONPATH', ''))
     version = framework.version()
     manifest = {'schema': 1, 'metric': 'host_to_host_call_wall_seconds',
-                'metric_version': METRIC_VERSION, 'run_id': run_root.name,
+                'metric_version': METRIC_VERSION, 'protocol_version': PROTOCOL_VERSION, 'run_id': run_root.name,
                 'started_utc': datetime.now(timezone.utc).isoformat(), 'arguments': args,
                 'golden': event, 'framework_version': version, 'python': sys.version,
                 'host': os.uname().nodename,
                 'implementation_sources': golden.source_hashes([p for p, _ in framework.impl_files(bench)], package_root),
-                'environment': {k: v for k, v in env.items() if k.startswith(('OMP_', 'COVA_', 'NUMBA_', 'OPENBLAS_', 'MKL_', 'NPBENCH_'))},
-                'processes': [], 'cancelled_processes': [], 'status': 'running'}
+                'environment': {k: v for k, v in env.items() if k.startswith(('OMP_', 'COVA_', 'NUMBA_', 'OPENBLAS_', 'MKL_', 'NPBENCH_', 'DACE_', 'CUPY_', 'CUDA'))},
+                'processes': [], 'cancelled_processes': [], 'artifact_environments': {}, 'status': 'running'}
     manifest_file = run_root / 'manifest.json'
     manifest_file.write_text(json.dumps(manifest, indent=2) + '\n')
     all_records = []
@@ -197,13 +203,23 @@ def _run(args):
         cell = run_root / label
         cell.mkdir()
         child_env = dict(env, NUMBA_CACHE_DIR=str(cell / 'numba-cache'), CUPY_CACHE_DIR=str(cell / 'cupy-cache'))
+        if framework.fname.startswith('dace_'):
+            # Override inherited site-wide caches before DaCe is imported in
+            # the worker. Both CPU/GPU variants need isolated, stable paths.
+            child_env.update(DACE_default_build_folder=str(cell / 'dace-cache'),
+                             DACE_cache='name', DACE_compiler_use_cache='false')
+        manifest['artifact_environments'][label] = {k: child_env[k] for k in
+            ('NUMBA_CACHE_DIR', 'CUPY_CACHE_DIR', 'DACE_default_build_folder',
+             'DACE_cache', 'DACE_compiler_use_cache') if k in child_env}
+        expected_artifacts = None
         for process_index in range(args['fresh_process_runs'] + 1):
             stem = 'process-' + str(process_index)
             samples_file = stem + '.jsonl'
             request = {'benchmark': bench.bname, 'framework': framework.fname, 'implementation': label,
                        'preset': args['preset'], 'repeat': args['repeat'], 'process_index': process_index,
                        'validate': args['validate'], 'golden_cache': str(cache), 'version': version,
-                       'samples_file': samples_file, 'implementation_sources': manifest['implementation_sources']}
+                       'samples_file': samples_file, 'implementation_sources': manifest['implementation_sources'],
+                       'expected_artifacts': expected_artifacts}
             request_path = cell / (stem + '.request.json')
             request_path.write_text(json.dumps(request))
             command = [sys.executable, '-m', 'npbench.infrastructure.lifecycle', '--worker', str(request_path)]
@@ -245,15 +261,36 @@ def _run(args):
                                           'samples': str((cell / samples_file).relative_to(run_root))})
             manifest_file.write_text(json.dumps(manifest, indent=2) + '\n')
             print(label, stem, 'exit', process.returncode, flush=True)
+            if process.returncode == 0 and records and all(r['status'] == 'passed' for r in records):
+                expected_artifacts = records[-1]['artifacts']['after']
+                if records[-1]['artifact_policy'] == 'numba_memory_only':
+                    unavailable = []
+                    for index in range(process_index + 1, args['fresh_process_runs'] + 1):
+                        row = {k: records[0][k] for k in
+                               ('benchmark', 'framework', 'implementation', 'preset', 'version', 'golden_key')}
+                        row.update(phase='fresh_process', process_index=index, call_index=0,
+                                   status='reuse_unsupported', time=None, validated=None,
+                                   artifact_policy='numba_memory_only', metric_version=METRIC_VERSION,
+                                   protocol_version=PROTOCOL_VERSION,
+                                   error='Numba specialization contains non-cacheable lifted code or dynamic globals')
+                        unavailable.append(row)
+                        _append(cell / ('process-' + str(index) + '.jsonl'), row)
+                        manifest['cancelled_processes'].append(
+                            {'implementation': label, 'index': index, 'reason': 'reuse_unsupported'})
+                    all_records.extend(unavailable)
+                    save_results(database, run_root.name, unavailable)
+                    break
             if process.returncode or any(r['status'] != 'passed' for r in records):
                 manifest['cancelled_processes'].extend(
                     {'implementation': label, 'index': index, 'reason': 'earlier worker failed'}
                     for index in range(process_index + 1, args['fresh_process_runs'] + 1))
                 break
-    manifest['status'] = 'passed' if all_records and all(r['status'] == 'passed' for r in all_records) else 'failed'
+    statuses = {r['status'] for r in all_records}
+    manifest['status'] = ('passed' if statuses == {'passed'} else 'partial'
+                          if statuses and statuses <= {'passed', 'reuse_unsupported'} else 'failed')
     manifest_file.write_text(json.dumps(manifest, indent=2) + '\n')
     print('Lifecycle results:', run_root, flush=True)
-    return 0 if manifest['status'] == 'passed' else 1
+    return {'passed': 0, 'partial': 2, 'failed': 1}[manifest['status']]
 
 
 if __name__ == '__main__':

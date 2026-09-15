@@ -18,9 +18,10 @@ class Region:
     Compilation/restoration belongs to the first call, including frameworks
     that normally compile eagerly in implementations().
     """
-    def __init__(self, bench, framework, label, writebacks, restore=False, artifacts_available=True):
+    def __init__(self, bench, framework, label, writebacks, restore=False, artifacts_available=True, scalar_returns=()):
         self.bench, self.framework, self.label = bench, framework, label
         self.writebacks = writebacks
+        self.scalar_returns = scalar_returns
         self.restore = restore
         self.artifacts_available = artifacts_available
         self.stage = 'prepare'
@@ -44,7 +45,8 @@ class Region:
         self.stage = 'execute'
         exec(self.statement, context)
         self.stage = 'materialize'
-        result = [to_host(value) for value in outputs(context['__npb_result'])]
+        result = fw.normalize_returns([to_host(value) for value in outputs(context['__npb_result'])],
+                                      self.scalar_returns)
         for name, argument in zip(bench.info['input_args'], fw.args(bench, self.impl)):
             if name in self.writebacks and device_inputs:
                 np.copyto(data[name], to_host(context[argument]), casting='no')

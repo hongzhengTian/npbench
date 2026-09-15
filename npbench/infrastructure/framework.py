@@ -39,6 +39,10 @@ class Framework(object):
         a benchmark. """
         return {}
 
+    def normalize_returns(self, values, scalar_returns):
+        """Convert framework ABI representations to the reference call contract."""
+        return values
+
     def copy_func(self) -> Callable:
         """ Returns the copy-method that should be used 
         for copying the benchmark arguments. """

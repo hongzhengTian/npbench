@@ -83,6 +83,27 @@ class GoldenTest(unittest.TestCase):
         actual['arrays']['C'][0, 0] = np.nan
         self.assertFalse(golden.validate(self.bench, bundle, actual))
 
+    def test_diagnostics_identify_structure_nonfinite_and_numerical_failures(self):
+        bundle, _ = self.get()
+        for reason, modify in [
+            ('count', lambda a: a.update(returns=[np.zeros(1)])),
+            ('keys', lambda a: a.update(arrays={})),
+            ('shape', lambda a: a['arrays'].update(C=np.zeros(1))),
+            ('dtype', lambda a: a['arrays'].update(C=a['arrays']['C'].astype(np.float32))),
+            ('nonfinite', lambda a: a['arrays']['C'].fill(np.nan)),
+            ('values', lambda a: a['arrays']['C'].fill(-1000)),
+        ]:
+            with self.subTest(reason=reason):
+                actual = dict(bundle, arrays=golden.clone_data(bundle['arrays']))
+                modify(actual)
+                details = []
+                self.assertFalse(golden.validate(self.bench, bundle, actual, diagnostics=details))
+                self.assertIn(reason, {d['reason'] for d in details})
+                json.dumps(details, allow_nan=False)
+        details = []
+        self.assertTrue(golden.validate(self.bench, bundle, bundle, diagnostics=details))
+        self.assertEqual(details, [])
+
     def test_concurrent_requests_generate_once(self):
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=4) as pool:

@@ -190,20 +190,38 @@ def load_or_create(bench, preset, numpy, cache, *, required=False, load_values=T
     return bundle, event
 
 
-def validate(bench, expected, actual):
-    """Retain NPBench tolerances, while checking complete observable structure."""
+def validate(bench, expected, actual, *, diagnostics=None):
+    """Keep the numerical policy; optionally identify each rejected output."""
     from . import utilities as util
+    failures = []
     if len(expected['returns']) != len(actual['returns']):
-        return False
+        failures.append({'field': 'returns', 'reason': 'count',
+                         'expected': len(expected['returns']), 'actual': len(actual['returns'])})
     if expected['arrays'].keys() != actual['arrays'].keys():
-        return False
-    ref = [*expected['returns'], *expected['arrays'].values()]
-    val = [*actual['returns'], *[actual['arrays'][k] for k in expected['arrays']]]
-    for x, y in zip(ref, val):
-        if np.shape(x) != np.shape(y) or np.asarray(x).dtype != np.asarray(y).dtype:
-            return False
-        if not np.all(np.isfinite(x)) or not np.all(np.isfinite(y)):
-            return False
-    return bool(util.validate(ref, val, rtol=bench.info.get('rtol', 1e-5),
-                              atol=bench.info.get('atol', 1e-8),
-                              norm_error=bench.info.get('norm_error', 1e-5)))
+        failures.append({'field': 'arrays', 'reason': 'keys',
+                         'expected': sorted(expected['arrays']), 'actual': sorted(actual['arrays'])})
+    pairs = [('returns[' + str(i) + ']', x, y) for i, (x, y) in
+             enumerate(zip(expected['returns'], actual['returns']))]
+    pairs.extend(('arrays.' + k, x, actual['arrays'][k])
+                 for k, x in expected['arrays'].items() if k in actual['arrays'])
+    for field, x, y in pairs:
+        x, y = np.asarray(x), np.asarray(y)
+        description = {'field': field, 'expected_shape': list(x.shape), 'actual_shape': list(y.shape),
+                       'expected_dtype': str(x.dtype), 'actual_dtype': str(y.dtype)}
+        if x.shape != y.shape:
+            failures.append(dict(description, reason='shape'))
+        elif x.dtype != y.dtype:
+            failures.append(dict(description, reason='dtype'))
+        elif not np.all(np.isfinite(x)) or not np.all(np.isfinite(y)):
+            failures.append(dict(description, reason='nonfinite',
+                                 expected_nonfinite=int(np.count_nonzero(~np.isfinite(x))),
+                                 actual_nonfinite=int(np.count_nonzero(~np.isfinite(y)))))
+        elif not util.validate([x], [y], rtol=bench.info.get('rtol', 1e-5),
+                               atol=bench.info.get('atol', 1e-8),
+                               norm_error=bench.info.get('norm_error', 1e-5)):
+            failures.append(dict(description, reason='values',
+                                 rtol=bench.info.get('rtol', 1e-5), atol=bench.info.get('atol', 1e-8),
+                                 norm_error=bench.info.get('norm_error', 1e-5)))
+    if diagnostics is not None:
+        diagnostics.extend(failures)
+    return not failures

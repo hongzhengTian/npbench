@@ -24,6 +24,7 @@ Optional environment:
   NPBENCH_TIMEOUT          seconds per complete worker (default 1800)
   NPBENCH_GOLDEN_TIMEOUT   seconds per reference preparation (default 1800)
   NPBENCH_PYTHON           Python executable (default python)
+  NPBENCH_RETRY_FROM       restrict baselines to affected failures in an old collection
 
 cova mode requires existing goldens and never runs their producers.
 No dependencies are installed. The script does not promise overnight completion
@@ -65,7 +66,7 @@ freeze_collection() {
 "${runner[@]}" - "$repo" "$out" "$mode" <<'PY'
 import hashlib, importlib.metadata, json, os, pathlib, subprocess, sys
 from npbench.infrastructure import Benchmark, generate_framework
-from npbench.infrastructure.lifecycle import METRIC_VERSION
+from npbench.infrastructure.lifecycle import METRIC_VERSION, PROTOCOL_VERSION
 repo, out = map(pathlib.Path, sys.argv[1:3]); mode = sys.argv[3]
 def capture(command):
     try:
@@ -95,6 +96,19 @@ allowed = baselines + cova if mode == 'all' else baselines if mode == 'baselines
 selected = os.environ.get('NPBENCH_FRAMEWORKS', '').split() or allowed
 assert len(selected) == len(set(selected)) and set(selected) <= set(allowed), 'Invalid framework selection'
 frameworks = [name for name in allowed if name in selected]
+retry = None
+if os.environ.get('NPBENCH_RETRY_FROM'):
+    from scripts.retry_affected import select
+    assert mode == 'baselines', 'Retry selection only supports baselines'
+    retry = select(pathlib.Path(os.environ['NPBENCH_RETRY_FROM']))
+    assert retry['cells'], 'No affected failures to retry'
+    assert os.environ['NPBENCH_PRESET'] == retry['preset'], 'Retry preset differs from original'
+    assert not out.is_relative_to(pathlib.Path(retry['source'])), 'Use a separate retry directory'
+    retry_keys = {tuple(row[:3]) for row in retry['cells']}
+    benchmarks = [b for b in benchmarks if any(key[0] == b for key in retry_keys)]
+    frameworks = [f for f in frameworks if any(key[1] == f for key in retry_keys)]
+    assert all(b in benchmarks and f in frameworks for b, f, _ in retry_keys), 'Subset overrides exclude retry cells'
+
 if any(name in ('cupy', 'dace_gpu', 'cova_llvm_gpu', 'cova_openmp_gpu') for name in frameworks):
     import cupy
     assert cupy.cuda.runtime.getDeviceCount() > 0, 'GPU unavailable'
@@ -117,13 +131,15 @@ environment = {k: v for k, v in os.environ.items() if k.startswith(
     or k in ('PATH', 'PYTHONPATH', 'LD_LIBRARY_PATH', 'LIBRARY_PATH', 'CPATH', 'CMAKE_PREFIX_PATH',
              'COVAPATH', 'CC', 'CXX', 'FC', 'CMAKE_BUILD_PARALLEL_LEVEL')}
 contract = {'mode': mode, 'benchmarks': benchmarks, 'frameworks': frameworks,
-            'metric_version': METRIC_VERSION, 'npbench_revision': revision(repo), 'sources': sources,
+            'metric_version': METRIC_VERSION, 'protocol_version': PROTOCOL_VERSION, 'npbench_revision': revision(repo), 'sources': sources,
             'framework_versions': versions, 'python': sys.version, 'executable': sys.executable,
             'pip_freeze': capture([sys.executable, '-m', 'pip', 'freeze', '--all']),
             'environment': environment, 'host': os.uname().nodename,
             'affinity': sorted(os.sched_getaffinity(0)), 'gpu': gpu,
             'gpu_identity': capture(['nvidia-smi', '--query-gpu=uuid,name,driver_version', '--format=csv,noheader']) if gpu else None,
             'nvcc': capture(['nvcc', '--version']) if gpu else None}
+if retry is not None:
+    contract['retry_selection'] = retry
 if cova_root:
     contract['cova_revision'] = revision(cova_root)
     contract['cova_diff'] = capture(['git', '-C', str(cova_root), 'diff', 'HEAD', '--binary'])
@@ -163,9 +179,12 @@ for phase in ('baselines', 'cova'):
             framework = generate_framework(framework_name)
             labels = framework.implementation_names(bench)
             for label in labels:
+                if retry is not None and (name, framework_name, label) not in retry_keys: continue
                 files = framework.impl_files(bench)
                 exists = any(path.is_file() and (file_label == label or framework_name.startswith('dace_')) for path, file_label in files)
                 plan.append((phase, name, framework_name, label, 'present' if exists else 'missing_source'))
+if retry is not None:
+    assert {(b, f, label) for phase, b, f, label, _ in plan if phase == 'baselines'} == retry_keys, 'Retry implementation unavailable'
 (out/'plan.tsv').write_text(''.join('\t'.join(row)+'\n' for row in plan))
 (out/'cova-version.txt').write_text(os.environ.get('NPBENCH_COVA_VERSION', 'unselected')+'\n')
 print('Collection:', out, '; planned steps:', len(plan), flush=True)
@@ -199,7 +218,7 @@ while IFS=$'\t' read -r phase benchmark framework implementation availability; d
                  --golden-cache "$NPBENCH_GOLDEN_CACHE")
         if [[ "$phase" == golden ]]; then
             command+=(--prepare-golden)
-            [[ "$mode" != cova ]] || command+=(--require-golden)
+            if [[ "$mode" == cova || -n "${NPBENCH_RETRY_FROM:-}" ]]; then command+=(--require-golden); fi
             command=(timeout --kill-after=10s "${NPBENCH_GOLDEN_TIMEOUT}s" "${command[@]}")
         else
             command+=(-f "$framework" --implementation "$implementation" --lifecycle --require-golden

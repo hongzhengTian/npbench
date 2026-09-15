@@ -62,6 +62,7 @@ The parent records complete worker lifetime separately.
 A timed call's own output is validated directly; no extra execution is performed just to retrieve a result.
 The parent verifies the golden without retaining its arrays, and workers release each call's inputs/results after validation and before preparing the next call.
 This avoids retaining an extra workload in host/device memory during subsequent measurements.
+The timing boundary remains `metric_version=2`; current lifecycle records also carry `protocol_version=3` for cache isolation, reuse capability classification, artifact integrity checks and validation diagnostics.
 New observations carry `metric_version=2`; earlier development records without this field used different buffer retention and should not be pooled into this collection.
 
 Required host writebacks include declared output arguments and arrays whose final reference values differ from their inputs.
@@ -73,9 +74,24 @@ CoVA already consumes host arrays; CuPy and DaCe GPU conversions now occur insid
 NumPy, Numba, DaCe CPU/GPU, CuPy and the six CoVA routes have lifecycle adapters.
 Use `--implementation LABEL` to select one variant, for example `nopython-mode` for Numba or `fusion`, `parallel`, `auto_opt` for DaCe.
 Numba's existing dispatcher has disk caching enabled only in this mode.
+After compilation, specializations containing non-cacheable lifted code or dynamic globals are recorded as `artifact_policy=numba_memory_only`.
+Their initialization and same-process calls are still measured and validated.
+Requested later-process observations are recorded as `reuse_unsupported`, without a duration or validation flag, and those processes are not launched.
+No cold recompile is substituted for artifact reuse.
+A run containing only passed calls and unsupported reuse observations has manifest status `partial` and exit code 2; actual failures still produce exit code 1.
+With no later processes requested, a successful memory-only run can finish with exit code 0.
 Discovery uses the implementation files actually present in the benchmark.
 If an upstream Numba file exposes an ordinary Python function, it remains Python and is recorded with `artifact_policy=python`; the adapter does not add the missing decorator or claim JIT execution.
 Pure CuPy library calls may need no generated cache entry and use `artifact_policy=library_cache`.
+DaCe workers override inherited `DACE_default_build_folder`, `DACE_cache`, and `DACE_compiler_use_cache` with an isolated per-implementation cache, stable names, and disabled implicit compiler-cache reuse.
+The manifest records the effective worker cache environment.
+The artifact record stores a path relative to the isolated run directory and rejects paths outside it.
+Later workers compare native artifact hashes and modification times with the preceding worker before importing the implementation.
+Missing or changed artifacts remain failures, distinct from an unsupported persistence capability.
+DaCe deserialization errors retain their original cause and are recorded with `failure_stage=restore`; the loader never substitutes compilation for a failed restore.
+The DaCe adapter unwraps a one-element return array only when the reference return slot is scalar.
+It preserves the actual dtype; array-valued slots, wrong sizes, extra/missing returns and dtype mismatches remain validation failures.
+This restores the scalar call ABI without modifying benchmark code or numerical tolerances.
 DaCe uses the upstream transformation recipes for the selected variant and restores the resulting compiled SDFG in later processes.
 Compilation or restore failures remain failures; missing artifacts do not trigger a replacement cold build disguised as reuse.
 CoVA and CuPy use their native persistent caches in isolated directories.
@@ -106,6 +122,8 @@ Per-process JSONL observations and stdout/stderr remain beside the artifacts.
 Native artifact hashes and modification times distinguish unchanged reuse from builds or changes; new-process and same-process measurements with changed artifacts are marked `artifact_reuse_failed`.
 NumPy has no compiled artifact requirement.
 CoVA placement metadata separately identifies GPU execution, CPU fallback and mixed execution; numerical success alone does not qualify a GPU-only comparison.
+Validation observations include `validation_failures` identifying return count, array keys, field shape/dtype, nonfinite counts, or numerical-value rejection with the unchanged tolerance policy.
+Diagnostics are collected outside the timer and do not cast results, remove outputs, or relax comparisons.
 A failed or aborted worker stops later processes for that implementation, while other implementations can still be collected.
 No failed measurement is assigned a zero time or included as a successful sample.
 A process exit before a callable starts has no call duration.
@@ -146,6 +164,7 @@ Timeouts, numerical failures and blocked goldens are incomplete coverage, not va
 
 Each result directory contains a frozen `collection.json`, `plan.tsv`, source/environment snapshots and `progress.tsv`.
 Each step keeps its exact command, exit code and logs; lifecycle steps also keep their own SQLite database, JSONL, manifests and artifacts.
+Exit code 2 on a lifecycle step indicates a partial result with unsupported reuse; it is retained rather than marked as a complete pass.
 Resuming the same command and result directory verifies the recorded code/environment/resource contract and skips steps that already have an exit-code receipt, including failed steps.
 Interrupted steps without a receipt run again in a new artifact directory; their older attempts remain in the evidence with distinct run IDs.
 Use the complete run manifest and successful step status when selecting samples; do not pool incomplete attempts or failed cells into a baseline.
@@ -168,3 +187,10 @@ Changes to these conditions require affected baseline measurements again, even w
 Before publication, inspect numerical/device coverage and dispersion, repeat representative baseline controls to check machine drift, and collect more independent observations where needed.
 This collection provides only one initialization observation per successful implementation; repeat independent collections if initialization itself is a publication metric.
 Preserving goldens and raw records does not make one night's timings permanently valid for every later environment.
+
+For failures in the original pre-protocol-3 collection, `./retry_affected.sh --dry-run` lists the exact baseline implementations affected by the cache-location, cache-capability, and confirmed scalar-return fixes.
+Run `./retry_affected.sh OLD_COLLECTION NEW_RESULT_DIRECTORY` to collect only those cells through `run_large.sh`, requiring existing goldens.
+The default old collection is `.cache/large-runs/large-20260912`; completed successes, CoVA, and unrelated failures are excluded.
+The selection and hashes of its evidence are frozen in `collection.json`; use the same new directory to resume without repeating completed retry cells.
+Each selected failed implementation receives a complete new lifecycle, including initialization needed to create isolated artifacts; old successful calls within that failed implementation remain in the original collection.
+Numba memory-only cases still cannot supply fresh-process reuse, and upstream failures may remain.

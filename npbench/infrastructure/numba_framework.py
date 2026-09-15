@@ -45,7 +45,15 @@ class NumbaFramework(Framework):
         return [label for source, label in self.impl_files(bench) if source.is_file()]
 
     def artifact_policy(self, implementation):
-        return 'numba_disk_cache' if hasattr(implementation, 'enable_caching') else 'python'
+        if not hasattr(implementation, 'enable_caching'):
+            return 'python'
+        # Enabling the cache is a request, not proof that this specialization
+        # can be serialized. Numba explicitly excludes lifted code and dynamic
+        # globals in CompileResultCacheImpl.check_cachable.
+        for result in implementation.overloads.values():
+            if any(not loop.can_cache for loop in result.lifted) or result.library.has_dynamic_globals:
+                return 'numba_memory_only'
+        return 'numba_disk_cache'
 
     def load_implementation(self, bench, label, *, restore=False):
         module = 'npbench.benchmarks.' + bench.info['relative_path'].replace('/', '.')

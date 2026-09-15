@@ -8,6 +8,11 @@ from npbench.infrastructure import Benchmark, Framework, utilities as util
 from typing import Callable, Sequence, Tuple
 
 
+class DaceRestoreError(RuntimeError):
+    """Restoration failed after selecting a saved DaCe artifact."""
+    failure_stage = 'restore'
+
+
 class DaceFramework(Framework):
     """ A class for reading and processing framework information. """
 
@@ -51,6 +56,15 @@ class DaceFramework(Framework):
             return cp_copy_func
         return super().copy_func()
 
+    def normalize_returns(self, values, scalar_returns):
+        # DaCe represents some scalar expressions as one-element arrays.
+        # Only scalar slots in the reference contract may be unwrapped, and
+        # NumPy scalar indexing preserves the actual dtype for validation.
+        import numpy as np
+        return [value.reshape(())[()] if index < len(scalar_returns) and scalar_returns[index]
+                and isinstance(value, np.ndarray) and value.shape == (1,) else value
+                for index, value in enumerate(values)]
+
     def implementation_names(self, bench):
         return ['fusion', 'parallel', 'auto_opt']
 
@@ -73,14 +87,27 @@ class DaceFramework(Framework):
                     info = json.loads(record.read_text())
                     if info['label'] != label or info['version'] != self.version():
                         raise ValueError('Incompatible DaCe artifact')
-                    compiled = load_precompiled_sdfg(info['build_folder'])
+                    folder = (Path.cwd() / info['build_folder']).resolve()
+                    if info.get('schema') != 2 or not folder.is_relative_to(Path.cwd().resolve()):
+                        raise ValueError('DaCe artifact is outside the isolated run directory')
+                    from dace.config import set_temporary
+                    try:
+                        # Do not hide malformed serialized descriptors behind
+                        # DaCe's generic SerializableObject fallback.
+                        with set_temporary('testing', 'deserialize_exception', value=True):
+                            compiled = load_precompiled_sdfg(str(folder))
+                    except Exception as error:
+                        raise DaceRestoreError(f'DaCe artifact restoration failed: {type(error).__name__}: {error}') from error
                 else:
                     implementations = self.implementations(bench, selected=label)
                     if len(implementations) != 1:
                         raise RuntimeError('DaCe implementation failed to prepare: ' + label)
                     compiled, _ = implementations[0]
-                    record.write_text(json.dumps({'label': label, 'version': self.version(),
-                                                 'build_folder': str(Path(compiled.sdfg.build_folder).resolve())}))
+                    folder = Path(compiled.sdfg.build_folder).resolve()
+                    if not folder.is_relative_to(Path.cwd().resolve()):
+                        raise ValueError('DaCe build escaped the isolated run directory')
+                    record.write_text(json.dumps({'schema': 2, 'label': label, 'version': self.version(),
+                                                 'build_folder': str(folder.relative_to(Path.cwd().resolve()))}))
             return compiled(*args, **kwargs)
         return invoke
 

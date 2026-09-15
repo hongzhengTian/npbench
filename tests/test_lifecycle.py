@@ -186,5 +186,99 @@ class LifecycleTest(unittest.TestCase):
                 self.assertIsNone(conn.execute('SELECT validated FROM results ORDER BY id DESC LIMIT 1').fetchone()[0])
 
 
+class ReuseClassificationTest(unittest.TestCase):
+    def test_dace_restore_reports_original_deserialization_error_without_compiling(self):
+        from npbench.infrastructure.dace_framework import DaceRestoreError
+        framework = generate_framework('dace_cpu')
+        bench = Benchmark('gemm')
+        saved = json.dumps({'schema': 2, 'label': 'fusion', 'version': framework.version(),
+                            'build_folder': 'dace-cache/fusion'})
+        with patch('dace.sdfg.utils.load_precompiled_sdfg', side_effect=TypeError('Offset must be the same size as shape')), \
+                patch('pathlib.Path.read_text', return_value=saved), \
+                patch.object(framework, 'implementations', side_effect=AssertionError('compiled')), \
+                patch('npbench.infrastructure.dace_framework.importlib.import_module'):
+            implementation = framework.load_implementation(bench, 'fusion', restore=True)
+            with self.assertRaisesRegex(DaceRestoreError, 'Offset must be the same size as shape') as caught:
+                implementation()
+            self.assertEqual(caught.exception.failure_stage, 'restore')
+
+
+    def test_dace_scalar_abi_normalization_preserves_array_shape_and_dtype_checks(self):
+        framework = generate_framework('dace_cpu')
+        bench = Benchmark('crc16')
+        expected = {'returns': [np.int64(42)], 'arrays': {}}
+        normalized = framework.normalize_returns([np.array([42], dtype=np.int64)], (True,))
+        self.assertTrue(golden.validate(bench, expected, {'returns': normalized, 'arrays': {}}))
+        for values, scalar in [([np.array([42], dtype=np.int64)], (False,)),
+                               ([np.array([42], dtype=np.int32)], (True,)),
+                               ([np.array([42, 42], dtype=np.int64)], (True,)),
+                               ([np.array([43], dtype=np.int64)], (True,)),
+                               ([np.array([42], dtype=np.int64), np.int64(42)], (True,))]:
+            normalized = framework.normalize_returns(values, scalar)
+            self.assertFalse(golden.validate(bench, expected, {'returns': normalized, 'arrays': {}}))
+
+
+    def test_dace_worker_cache_environment_ignores_inherited_shared_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            shared = root/'shared'; shared.mkdir()
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONDONTWRITEBYTECODE='1',
+                       OPENBLAS_NUM_THREADS='1', DACE_default_build_folder=str(shared),
+                       DACE_cache='single', DACE_compiler_use_cache='true')
+            # Force an immediate timeout: this tests launch configuration for
+            # all variants without making the unit suite compile DaCe graphs.
+            command = [sys.executable, str(ROOT/'run_benchmark.py'), '-b', 'gemm', '-p', 'S',
+                       '-f', 'dace_cpu', '--lifecycle', '-r', '1', '--fresh-process-runs', '0',
+                       '-t', '0.001', '--golden-cache', str(root/'goldens'), '--run-dir', str(root/'runs')]
+            result = subprocess.run(command, cwd=root, env=env, capture_output=True, timeout=60)
+            self.assertEqual(result.returncode, 1)
+            path, = (root/'runs').glob('*/manifest.json')
+            manifest = json.loads(path.read_text())
+            self.assertEqual(set(manifest['artifact_environments']), {'fusion', 'parallel', 'auto_opt'})
+            for label, actual in manifest['artifact_environments'].items():
+                self.assertEqual(actual['DACE_default_build_folder'], str(path.parent/label/'dace-cache'))
+                self.assertEqual(actual['DACE_cache'], 'name')
+                self.assertEqual(actual['DACE_compiler_use_cache'], 'false')
+            self.assertEqual(list(shared.iterdir()), [])
+
+    def test_numba_lifted_code_preserves_local_calls_and_marks_fresh_unsupported(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONDONTWRITEBYTECODE='1',
+                       OPENBLAS_NUM_THREADS='1', NUMBA_NUM_THREADS='1', OMP_NUM_THREADS='1')
+            command = [sys.executable, str(ROOT/'run_benchmark.py'), '-b', 'correlation',
+                       '-p', 'S', '-f', 'numba', '--implementation', 'object-mode',
+                       '--lifecycle', '-r', '1', '--fresh-process-runs', '2', '-t', '90',
+                       '--golden-cache', str(root/'goldens'), '--run-dir', str(root/'runs')]
+            result = subprocess.run(command, cwd=root, env=env, capture_output=True, timeout=120)
+            self.assertEqual(result.returncode, 2, result.stderr.decode())
+            manifest_path, = (root/'runs').glob('*/manifest.json')
+            manifest = json.loads(manifest_path.read_text())
+            self.assertEqual(manifest['status'], 'partial')
+            self.assertEqual(len(manifest['processes']), 1)
+            self.assertEqual(len(list(manifest_path.parent.glob('*/*.request.json'))), 1)
+            with sqlite3.connect(root/'npbench.db') as connection:
+                rows = connection.execute('SELECT phase,status,time,validated FROM lifecycle_results').fetchall()
+            self.assertEqual([r[:2] for r in rows], [('initialization', 'passed'), ('same_process', 'passed'),
+                                                   ('fresh_process', 'reuse_unsupported'), ('fresh_process', 'reuse_unsupported')])
+            self.assertTrue(all(r[2] is None and r[3] is None for r in rows[2:]))
+
+    def test_worker_rejects_changed_artifacts_before_importing_implementation(self):
+        from npbench.infrastructure.lifecycle import worker
+        bench = Benchmark('gemm')
+        request = {'benchmark': 'gemm', 'preset': 'S', 'framework': 'numpy',
+                   'golden_cache': '/unused', 'implementation_sources': {},
+                   'version': 'unit', 'expected_artifacts': {'missing.so': {}}}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as stream:
+            json.dump(request, stream); stream.flush()
+            with patch('npbench.infrastructure.lifecycle.golden.load_or_create', return_value=({'arrays': {}, 'inputs': {}}, {})), \
+                    patch('npbench.infrastructure.lifecycle.golden.source_hashes', return_value={}), \
+                    patch('npbench.infrastructure.lifecycle.artifact_state', return_value={}), \
+                    patch('npbench.infrastructure.framework.Framework.version', return_value='unit'), \
+                    patch('npbench.infrastructure.lifecycle.Region', side_effect=AssertionError('implementation imported')):
+                with self.assertRaisesRegex(ValueError, 'Artifact integrity'):
+                    worker(stream.name)
+
+
 if __name__ == '__main__':
     unittest.main()
