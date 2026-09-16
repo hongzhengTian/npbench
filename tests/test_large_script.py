@@ -75,7 +75,7 @@ class LargeScriptTest(unittest.TestCase):
             self.assertEqual(database.stat().st_mtime_ns, modified)
             manifest = json.loads((root/'run/collection.json').read_text())
             self.assertEqual(manifest['metric_version'], 3)
-            self.assertEqual(manifest['protocol_version'], 5)
+            self.assertEqual(manifest['protocol_version'], 6)
             self.assertEqual(manifest['affinity'], [int(env['NPBENCH_CPUSET'])])
 
 

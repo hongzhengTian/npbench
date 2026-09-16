@@ -23,6 +23,24 @@ def fixture(framework='numpy',repeat=2,fresh=2):
 
 
 class AnalysisTest(unittest.TestCase):
+    def test_protocol6_pass_without_required_cache_evidence_is_invalid(self):
+        b=fixture('numba'); cell=b['cells'][0]
+        cell['manifest']['protocol_version']=6
+        for row in cell['records']:
+            row.update(protocol_version=6,artifact_policy='numba_disk_cache')
+        self.assertEqual(set(a.eligibility(cell['records'],cell['manifest'],0).values()),{'invalid_reuse_evidence'})
+        for row in cell['records']:
+            row['numba_cache']={'state':'disk_hit' if row['phase']=='fresh_process' else 'memory_reuse','reuse_verified':True}
+        self.assertEqual(set(a.eligibility(cell['records'],cell['manifest'],0).values()),{'observed_pass'})
+
+    def test_historical_artifact_integrity_is_not_dispatcher_hit_proof(self):
+        b=fixture('numba'); rows=b['cells'][0]['records']
+        self.assertEqual(a.numba_reuse_evidence('numba','fresh_process',rows),'not_recorded')
+        for row in rows:
+            row['numba_cache']={'state':'disk_hit','reuse_verified':True}
+        self.assertEqual(a.numba_reuse_evidence('numba','fresh_process',rows),'verified_disk_hit')
+        self.assertEqual(a.numba_reuse_evidence('numba','same_process',rows),'not_verified')
+
     def test_best_observation_carries_uncertainty_and_does_not_certify(self):
         b=fixture(); candidate=fixture('cova_llvm_cpu')
         for row in candidate['cells'][0]['records']: row['time'] *= .9

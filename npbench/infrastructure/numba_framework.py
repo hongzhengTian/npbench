@@ -65,6 +65,41 @@ class NumbaFramework(Framework):
             implementation.enable_caching()
         return implementation
 
+    def cache_snapshot(self, implementation):
+        """Copy dispatcher counters outside the measured region."""
+        stats = getattr(implementation, 'stats', None)
+        if stats is None or not all(hasattr(stats, name) for name in ('cache_hits', 'cache_misses')):
+            return None
+        return {'hits': {str(k): int(v) for k, v in stats.cache_hits.items()},
+                'misses': {str(k): int(v) for k, v in stats.cache_misses.items()},
+                'signatures': sorted(str(s) for s in implementation.signatures)}
+
+    def cache_observation(self, implementation, before, phase):
+        """Distinguish entry-dispatcher disk hits, compilation and memory reuse.
+
+        Artifact integrity is checked separately by the lifecycle worker.
+        These counters do not certify arbitrary nested runtime activity.
+        """
+        after = self.cache_snapshot(implementation)
+        observation = {'schema': 1, 'scope': 'entry_dispatcher',
+                       'before': before, 'after': after, 'state': 'unverified'}
+        if before is None or after is None:
+            return observation
+        hits = sum(after['hits'].values()) - sum(before['hits'].values())
+        misses = sum(after['misses'].values()) - sum(before['misses'].values())
+        observation.update(cache_hits=hits, cache_misses=misses)
+        if hits < 0 or misses < 0:
+            return observation
+        if misses:
+            observation['state'] = 'cache_miss'
+        elif hits:
+            observation['state'] = 'disk_hit'
+        elif before['signatures'] and before['signatures'] == after['signatures']:
+            observation['state'] = 'memory_reuse'
+        observation['reuse_verified'] = ((phase == 'fresh_process' and observation['state'] == 'disk_hit')
+                                         or (phase == 'same_process' and observation['state'] == 'memory_reuse'))
+        return observation
+
     def implementations(self, bench: Benchmark) -> Sequence[Tuple[Callable, str]]:
         """ Returns the framework's implementations for a particular benchmark.
         :param bench: A benchmark.

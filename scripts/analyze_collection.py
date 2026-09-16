@@ -36,6 +36,22 @@ def succeeded(row):
             and isinstance(value, (int, float)) and math.isfinite(value) and value > 0)
 
 
+def numba_reuse_evidence(framework, phase, records):
+    if framework != 'numba' or phase == 'initialization':
+        return 'not_applicable'
+    observations = [r for r in records if r.get('phase') == phase and succeeded(r)]
+    if not observations:
+        return 'no_successful_observation'
+    if all(r.get('artifact_policy') == 'python' for r in observations):
+        return 'python_no_dispatcher'
+    if any('numba_cache' not in r for r in observations):
+        return 'not_recorded'
+    expected = 'disk_hit' if phase == 'fresh_process' else 'memory_reuse'
+    if all(r['numba_cache'].get('state') == expected and r['numba_cache'].get('reuse_verified') is True for r in observations):
+        return 'verified_' + expected
+    return 'not_verified'
+
+
 def eligibility(rows, manifest, exit_code):
     result = dict.fromkeys(PHASES, 'unavailable')
     if not rows or not manifest: return result
@@ -43,6 +59,14 @@ def eligibility(rows, manifest, exit_code):
         return dict.fromkeys(PHASES, 'excluded_validation_failure')
     if any(row.get('status') == 'passed' and not succeeded(row) for row in rows):
         return dict.fromkeys(PHASES, 'invalid_pass_record')
+    for row in rows:
+        if (manifest.get('protocol_version', 0) >= 6 and row.get('status') == 'passed'
+                and row.get('artifact_policy') == 'numba_disk_cache'
+                and row.get('phase') in ('fresh_process', 'same_process')):
+            state = 'disk_hit' if row['phase'] == 'fresh_process' else 'memory_reuse'
+            evidence = row.get('numba_cache', {})
+            if evidence.get('state') != state or evidence.get('reuse_verified') is not True:
+                return dict.fromkeys(PHASES, 'invalid_reuse_evidence')
     for row in rows:
         for field in ('metric_version', 'protocol_version', 'validation_contract', 'golden_key', 'golden_sha256'):
             expected = manifest.get('golden', {}).get('key' if field == 'golden_key' else 'sha256') if field.startswith('golden_') else manifest.get(field)
@@ -232,6 +256,7 @@ def analyze(bundles, *, replace_cova=False):
             if not numa or str(numa).startswith('unavailable'):
                 resource_limits.append('numa_policy_unverified')
             row = dict(base, phase=phase, eligibility=qualification, observed_samples=len(observed),
+                       numba_reuse_evidence=numba_reuse_evidence(cell['framework'], phase, rows),
                        observed_processes=len(medians),
                        samples_by_process_json=json.dumps({str(k): len(v) for k, v in sorted(grouped.items())}),
                        process_medians_json=json.dumps(medians), median_seconds=summary,
@@ -272,7 +297,7 @@ def analyze(bundles, *, replace_cova=False):
                           'samples_by_process_json', 'process_medians_json', 'process_max_min_ratio',
                           'process_variability_review_required', 'sampling_review',
                           'precision_review_required', 'resource_evidence_limits',
-                          'confirmation_status', 'formal_comparison_eligibility'):
+                          'confirmation_status', 'formal_comparison_eligibility', 'numba_reuse_evidence'):
                 selected_row[prefix + '_' + field] = selected_value[field] if selected_value else None
         best.append(selected_row)
     cold = []

@@ -69,7 +69,7 @@ CoVA failures are collected without requiring changes to CoVA during this baseli
 
 For each fully successful main cell there are 1 initialization, 2 fresh_process and 6 same_process samples: 9 timed calls, not 9 repeats after initialization.
 The current lifecycle CLI expresses this as --fresh-process-runs 2 -r 2.
-The host-to-host timing boundary remains metric_version=3; resource/error/provenance additions use protocol_version=5.
+The host-to-host timing boundary remains metric_version=3; resource/error/provenance and Numba reuse verification use protocol_version=6.
 See [Lifecycle semantics](lifecycle.md) for transfers, synchronization, input reset and artifact behavior.
 
 The campaign then runs these checked-in, finite supplementary selections:
@@ -158,4 +158,8 @@ No single geometric-mean speedup is generated across incompatible configurations
 Report paired sets and coverage explicitly when preparing paper aggregates.
 
 Before publication, repeat key baseline controls contemporaneously with the final CoVA revision and review workload/device equivalence, resource interference and variability.
+Protocol 6 retains metric_version=3 and strict_region_v1, but adds explicit Numba dispatcher reuse qualification.
+Older baseline records without these observations retain their original status and are labelled not_recorded; artifact integrity alone is not proof of a disk-cache hit.
+Collection identity still separates protocol and measurement-source changes: a new directory is required, and protocol-5/6 results must not be silently pooled.
+Any later cross-protocol baseline reuse needs an explicit compatibility review; this observational change alone does not require rerunning all historical baselines.
 A frozen baseline is reusable under its conditions; it is not permanently valid after changing the environment, inputs or measurement contract.

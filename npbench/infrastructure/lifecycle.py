@@ -26,7 +26,7 @@ from .region import Region
 
 PHASES = ('initialization', 'fresh_process', 'same_process')
 METRIC_VERSION = 3
-PROTOCOL_VERSION = 5
+PROTOCOL_VERSION = 6
 VALIDATION_CONTRACT = 'strict_region_v1'
 
 
@@ -128,6 +128,7 @@ def worker(request_path):
         data = golden.clone_data(bundle['inputs'])
         record['input_reset_seconds'] = time.perf_counter() - clone_started
         result = actual = None
+        cache_before = framework.cache_snapshot(region.impl) if framework.fname == 'numba' else None
         try:
             probe_cpu = os.environ.get('NPBENCH_RESOURCE_PROBE') == '1'
             if probe_cpu:
@@ -159,6 +160,14 @@ def worker(request_path):
             audit_started = time.perf_counter()
             record['placement'] = placement(root)
             record['artifact_policy'] = framework.artifact_policy(region.impl)
+            if framework.fname == 'numba':
+                record['numba_cache'] = framework.cache_observation(region.impl, cache_before, phase)
+                if (record['status'] == 'passed' and phase != 'initialization'
+                        and record['artifact_policy'] == 'numba_disk_cache'
+                        and not record['numba_cache'].get('reuse_verified', False)):
+                    record['status'] = 'artifact_reuse_failed'
+                    record['failure_stage'] = 'restore' if phase == 'fresh_process' else 'reuse'
+                    record['error'] = 'Numba dispatcher counters do not establish the requested reuse'
             after = artifact_state(root)
             record['artifacts'] = {'before': before, 'after': after,
                                    'state': 'unchanged' if before and before == after else 'changed' if after else 'none'}

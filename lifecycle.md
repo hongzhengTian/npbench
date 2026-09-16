@@ -76,6 +76,15 @@ CoVA already consumes host arrays; CuPy and DaCe GPU conversions now occur insid
 NumPy, Numba, DaCe CPU/GPU, CuPy and the six CoVA routes have lifecycle adapters.
 Use `--implementation LABEL` to select one variant, for example `nopython-mode` for Numba or `fusion`, `parallel`, `auto_opt` for DaCe.
 Numba's existing dispatcher has disk caching enabled only in this mode.
+Protocol 6 adds entry-dispatcher cache observations outside the timed region; metric_version remains 3.
+Each Numba call records copied before/after dispatcher statistics, signature lists, hit/miss deltas and a reuse verdict.
+For numba_disk_cache, a fresh-process call requires at least one disk hit and zero misses; a same-process call requires unchanged nonempty signatures and no new hit or miss.
+Missing counters, cache misses or contradictory observations fail the requested reuse with artifact_reuse_failed, even when artifact files remain unchanged.
+An initialization cache miss is expected and is not a reuse failure.
+This proves the observed entry-dispatcher path, not all possible nested runtime behavior.
+Historical protocol-5 files do not gain this evidence retroactively: the analyzer reports not_recorded for missing dispatcher observations.
+Plain Python implementations under the Numba label remain python_no_dispatcher and are not treated as disk-cache hits.
+
 After compilation, specializations containing non-cacheable lifted code or dynamic globals are recorded as `artifact_policy=numba_memory_only`.
 Their initialization and same-process calls are still measured and validated.
 Requested later-process observations are recorded as `reuse_unsupported`, without a duration or validation flag, and those processes are not launched.
