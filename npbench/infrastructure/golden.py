@@ -225,3 +225,35 @@ def validate(bench, expected, actual, *, diagnostics=None):
     if diagnostics is not None:
         diagnostics.extend(failures)
     return not failures
+
+
+def validation_audit(bench, expected, actual, failures):
+    """Explain stricter region checks without replacing their pass/fail result.
+
+    The native projection is diagnostic: original runner output ordering with
+    numerical tolerances, refusing to reproduce its silent zip truncation.
+    """
+    from . import utilities as util
+    declared = set(bench.info.get('output_args', []))
+    required_failures = [x for x in failures if not x['field'].startswith('arrays.')
+                         or x['field'][7:] in declared]
+    extra_failures = [x for x in failures if x['field'].startswith('arrays.')
+                      and x['field'][7:] not in declared]
+    reference = list(expected['returns']) + [expected['arrays'][k] for k in bench.info.get('output_args', [])]
+    result = list(actual['returns']) + [actual['arrays'][k] for k in bench.info.get('output_args', []) if k in actual['arrays']]
+    audit = {'schema': 1, 'strict_region_pass': not failures,
+             'declared_outputs_strict_pass': not required_failures,
+             'additional_array_state_failures': extra_failures,
+             'expected_native_output_count': len(reference), 'actual_native_output_count': len(result),
+             'native_projection_is_not_a_native_runner_execution': True}
+    if len(reference) != len(result):
+        audit['native_numeric_projection'] = 'incomparable_output_count'
+    else:
+        try:
+            valid = util.validate(reference, result, rtol=bench.info.get('rtol', 1e-5),
+                                  atol=bench.info.get('atol', 1e-8), norm_error=bench.info.get('norm_error', 1e-5))
+            audit['native_numeric_projection'] = 'passed' if valid else 'failed'
+        except (TypeError, ValueError) as error:
+            audit['native_numeric_projection'] = 'incomparable_structure'
+            audit['projection_error'] = type(error).__name__ + ': ' + str(error)
+    return audit

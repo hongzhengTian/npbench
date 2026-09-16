@@ -1,0 +1,8 @@
+gemm	numpy	default
+gemm	numba	nopython-mode-parallel
+gemm	dace_cpu	auto_opt
+gemm	cova_llvm_cpu	default
+gemm	cova_openmp_cpu	default
+floyd_warshall	dace_cpu	parallel
+spmv	dace_gpu	parallel
+correlation	numba	nopython-mode

@@ -21,6 +21,7 @@ python -m pip check
 For CuPy and DaCe GPU, use `requirements/native-cuda12.txt` in both dependency commands instead.
 Install only one CuPy distribution in the environment.
 The CUDA profile selects CuPy 13.6 to retain NumPy 1.26 compatibility with DaCe 1.0.2.
+The CPU profile includes threadpoolctl for observing loaded native thread pools outside timed calls.
 The version constraints preserve the established shared compiler versions; the setup does not modify an installed DaCe package.
 This is a reproducible environment selection, not an upstream guarantee that every implementation supports these versions.
 An editable installation keeps benchmark sources and JSON metadata available from this checkout, as expected by NPBench's current package layout.
@@ -46,7 +47,7 @@ export NPBENCH_NATIVE_PREFIX="$PWD/.cache/native/usr"
 Record the downloaded package versions and checksums with the run evidence.
 
 ```bash
-export NPBENCH_THREADS=2
+export NPBENCH_RESOURCE_POLICY=system
 # Optional when LAPACKE is outside system search paths:
 export NPBENCH_NATIVE_PREFIX=/path/to/native/usr
 source scripts/native-env.sh
@@ -67,7 +68,10 @@ python -c 'import cupy as cp; print(cp.cuda.runtime.getDeviceProperties(0)["name
 
 The script sets `CUDACXX` as well as CUDA library paths, because CMake can otherwise discover a different `nvcc`.
 After changing toolkits, use a new run directory so an existing `.dacecache` does not reuse an old CMake compiler selection.
-The script configures native-library paths, compiler selection, GPU architecture, and thread counts.
+The script configures native-library paths, compiler selection and GPU architecture.
+Its default system resource policy clears inherited thread/binding overrides and preserves scheduler allocation while allowing native runtime defaults.
+For explicit diagnostic budgets, set NPBENCH_RESOURCE_POLICY=fixed and NPBENCH_THREADS before activation.
+See [Reproducible L collections](formal-collection.md) for resource verification and optional NVML monitoring configuration.
 It does not override DaCe's CUDA stream policy or configure a device malloc heap.
 Independent shell variables and DaCe configuration files can still affect execution; start from a fresh shell when checking defaults.
 

@@ -18,7 +18,7 @@ class LargeScriptTest(unittest.TestCase):
                        NPBENCH_PRESET='S', NPBENCH_FRESH_PROCESSES='1', NPBENCH_REPEATS='1',
                        NPBENCH_TIMEOUT='60', NPBENCH_GOLDEN_TIMEOUT='60', NPBENCH_THREADS='1',
                        NPBENCH_CPUSET=str(min(os.sched_getaffinity(0))),
-                       NPBENCH_GOLDEN_CACHE=str(root/'goldens'))
+                       NPBENCH_GOLDEN_CACHE=str(root/'goldens'), NPBENCH_RESOURCE_POLICY='fixed', NPBENCH_REQUIRE_GOLDEN='0')
             command = ['bash', str(ROOT/'run_large.sh'), 'baselines', str(root/'run')]
             subprocess.run(command, env=env, check=True, capture_output=True, timeout=120)
             database = root/'run/baselines/gemm/numpy/default/npbench.db'
@@ -32,6 +32,11 @@ class LargeScriptTest(unittest.TestCase):
             modified = database.stat().st_mtime_ns
             again = subprocess.run(command, env=env, check=True, capture_output=True, text=True, timeout=60)
             self.assertIn('Resume: baselines gemm numpy default', again.stdout)
+            self.assertEqual(database.stat().st_mtime_ns, modified)
+            # Re-activating the environment can duplicate search entries;
+            # identical effective lookup must resume without rerunning calls.
+            duplicate_env = dict(env, PATH=env['PATH'] + os.pathsep + env['PATH'])
+            subprocess.run(command, env=duplicate_env, check=True, capture_output=True, timeout=60)
             self.assertEqual(database.stat().st_mtime_ns, modified)
             self.assertEqual(receipts, {str(p): p.read_bytes() for p in (root/'run').rglob('exit-code.txt')})
             # Synthetic old failure evidence; actual S execution uses the
@@ -65,12 +70,12 @@ class LargeScriptTest(unittest.TestCase):
             self.assertEqual(retry_database.stat().st_mtime_ns, retry_mtime)
             changed = subprocess.run(command, env=dict(env, NPBENCH_REPEATS='2'),
                                      capture_output=True, text=True, timeout=60)
-            self.assertNotEqual(changed.returncode, 0)
+            self.assertEqual(changed.returncode, 3)
             self.assertIn('Code/environment/selection changed', changed.stderr)
             self.assertEqual(database.stat().st_mtime_ns, modified)
             manifest = json.loads((root/'run/collection.json').read_text())
-            self.assertEqual(manifest['metric_version'], 2)
-            self.assertEqual(manifest['protocol_version'], 3)
+            self.assertEqual(manifest['metric_version'], 3)
+            self.assertEqual(manifest['protocol_version'], 5)
             self.assertEqual(manifest['affinity'], [int(env['NPBENCH_CPUSET'])])
 
 

@@ -38,7 +38,7 @@ This detects missing outputs and mutations omitted from upstream `output_args` w
 ```bash
 python run_benchmark.py -b gemm -f cova_llvm_cpu -p S \
   --lifecycle --golden-cache /path/to/goldens --require-golden \
-  --fresh-process-runs 3 -r 5 -t 600
+  --fresh-process-runs 2 -r 2 -t 600
 ```
 
 `--lifecycle` selects the optional measurement protocol.
@@ -62,8 +62,10 @@ The parent records complete worker lifetime separately.
 A timed call's own output is validated directly; no extra execution is performed just to retrieve a result.
 The parent verifies the golden without retaining its arrays, and workers release each call's inputs/results after validation and before preparing the next call.
 This avoids retaining an extra workload in host/device memory during subsequent measurements.
-The timing boundary remains `metric_version=2`; current lifecycle records also carry `protocol_version=3` for cache isolation, reuse capability classification, artifact integrity checks and validation diagnostics.
-New observations carry `metric_version=2`; earlier development records without this field used different buffer retention and should not be pooled into this collection.
+Current observations carry `metric_version=3` and `protocol_version=5`: the framework synchronizes execution before copying results to the host, and DaCe GPU waits for all device streams.
+Version-2 DaCe GPU observations did not guarantee completion of nonblocking DaCe streams before copyback and must not be pooled with corrected measurements.
+Earlier records without metric_version also used different buffer retention.
+See [Targeted baseline diagnostics](baseline-diagnostics.md) for the bounded restore adaptation, validation audit, resource evidence and user-run verification matrix.
 
 Required host writebacks include declared output arguments and arrays whose final reference values differ from their inputs.
 All remaining array arguments are also audited, with read-only device-array inspection outside the timer.
@@ -132,65 +134,11 @@ Stopping the lifecycle parent with SIGTERM or SIGINT also stops its active worke
 These records support lifecycle experiments; they do not by themselves establish fair resource allocation or publication-quality performance.
 Run competing measurements sequentially with consistent hardware, thread counts, software configuration and inputs, and retain failure/device coverage when comparing results.
 
-## Large collection and later CoVA-only runs
+## Collections and later CoVA-only runs
 
-After activating the prepared [native environment](native-environment.md) and [CoVA environment](cova.md), use the root shell script:
+See [Reproducible L collections](formal-collection.md) for the system-resource main matrix, independent initialization trials, finite resource supplements, golden reuse, resume rules, conditional analysis and portable evidence.
+The main default is 3 processes with 3 calls each, including each process's first call.
+Historical two-thread measurements have a different resource policy and remain diagnostic evidence.
 
-```bash
-mkdir -p .cache/large-runs
-nohup ./run_large.sh all .cache/large-runs/large-001 \
-  > .cache/large-runs/large-001.log 2>&1 &
-```
-
-`all` collects NumPy, every existing Numba variant, DaCe CPU/GPU (`fusion`, `parallel`, `auto_opt`), and CuPy before the six CoVA routes.
-`baselines` collects only those comparison frameworks.
-Other NPBench frameworks have no lifecycle adapters in this integration and are outside this script's selected matrix.
-Missing source files remain explicit `missing_source` steps rather than disappearing from the plan.
-The default is the unmodified `L` preset for all 54 registered benchmarks, not `paper`.
-
-Each successful implementation has one initialization call, three fresh-process first calls, and twenty same-process calls (five within each of four processes).
-The default CPU budget is two threads, pinned with taskset to the first two allowed CPUs, and the default visible GPU is device 0.
-Set `NPBENCH_THREADS` and `NPBENCH_CPUSET` explicitly before the first collection to choose a different fixed CPU budget and placement.
-Set `CUDA_VISIBLE_DEVICES` before starting to select another allocated GPU.
-Keep these settings for later CoVA comparisons and run on otherwise idle allocated resources.
-The script serializes its own collections but cannot reserve the machine against unrelated users/jobs.
-
-Goldens persist in `.cache/goldens` unless `NPBENCH_GOLDEN_CACHE` selects another location.
-The script bounds each golden preparation and each complete worker to 1800 seconds by default, records failures, and continues.
-The golden limit also covers loading and integrity checks; worker limits include imports, golden reads, compilation, all calls and checks in that process.
-Increase `NPBENCH_GOLDEN_TIMEOUT` or `NPBENCH_TIMEOUT` before starting if a larger budget is needed.
-Large cases may require substantial memory/storage and long reference or compilation times; no overnight completion is guaranteed.
-Timeouts, numerical failures and blocked goldens are incomplete coverage, not valid performance samples.
-
-Each result directory contains a frozen `collection.json`, `plan.tsv`, source/environment snapshots and `progress.tsv`.
-Each step keeps its exact command, exit code and logs; lifecycle steps also keep their own SQLite database, JSONL, manifests and artifacts.
-Exit code 2 on a lifecycle step indicates a partial result with unsupported reuse; it is retained rather than marked as a complete pass.
-Resuming the same command and result directory verifies the recorded code/environment/resource contract and skips steps that already have an exit-code receipt, including failed steps.
-Interrupted steps without a receipt run again in a new artifact directory; their older attempts remain in the evidence with distinct run IDs.
-Use the complete run manifest and successful step status when selecting samples; do not pool incomplete attempts or failed cells into a baseline.
-Use a new result directory to retry failed steps or change code, selections or budgets.
-`NPBENCH_BENCHMARKS` and `NPBENCH_FRAMEWORKS` can select a focused subset for such a retry; `./run_large.sh --help` lists all controls.
-Results/goldens within the checkout must use an ignored directory, such as `.cache/`, to keep them out of source snapshots and commits.
-
-For a later CoVA revision, use a new result directory with the same golden cache and resource configuration:
-
-```bash
-./run_large.sh cova .cache/large-runs/cova-next
-```
-
-This mode requires golden hits and never executes the reference producers or comparison frameworks.
-Missing goldens remain blocked steps and need a separately recorded reference preparation/retry.
-The script records the current CoVA revision and working-tree changes instead of trusting a stale revision environment variable.
-
-Saved baseline samples remain usable when the workload, inputs/dtypes, observable outputs, metric version, hardware, thread/affinity policy and baseline dependency/toolchain configuration remain comparable.
-Changes to these conditions require affected baseline measurements again, even when their Python implementation files are unchanged.
-Before publication, inspect numerical/device coverage and dispersion, repeat representative baseline controls to check machine drift, and collect more independent observations where needed.
-This collection provides only one initialization observation per successful implementation; repeat independent collections if initialization itself is a publication metric.
-Preserving goldens and raw records does not make one night's timings permanently valid for every later environment.
-
-For failures in the original pre-protocol-3 collection, `./retry_affected.sh --dry-run` lists the exact baseline implementations affected by the cache-location, cache-capability, and confirmed scalar-return fixes.
-Run `./retry_affected.sh OLD_COLLECTION NEW_RESULT_DIRECTORY` to collect only those cells through `run_large.sh`, requiring existing goldens.
-The default old collection is `.cache/large-runs/large-20260912`; completed successes, CoVA, and unrelated failures are excluded.
-The selection and hashes of its evidence are frozen in `collection.json`; use the same new directory to resume without repeating completed retry cells.
-Each selected failed implementation receives a complete new lifecycle, including initialization needed to create isolated artifacts; old successful calls within that failed implementation remain in the original collection.
-Numba memory-only cases still cannot supply fresh-process reuse, and upstream failures may remain.
+For failures in the original pre-protocol-3 collection, retry_affected.sh selects only the baseline implementations affected by the prior cache-location, cache-capability and confirmed scalar-return fixes.
+Its old selection remains historical; use a new exact selection with run_large.sh for other follow-ups.

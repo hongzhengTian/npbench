@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Retry only original failures affected by the protocol-3 infrastructure fixes.
 set -euo pipefail
+export NPBENCH_RESOURCE_POLICY="${NPBENCH_RESOURCE_POLICY:-fixed}"
 repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
     cat <<'HELP'
@@ -29,5 +30,7 @@ NPBENCH_RETRY_FROM="$(realpath -e -- "${1:-$repo/.cache/large-runs/large-2026091
 if "$dry_run"; then
     exec "${NPBENCH_PYTHON:-python}" "$repo/scripts/retry_affected.py" "$NPBENCH_RETRY_FROM"
 fi
+export NPBENCH_THREADS="${NPBENCH_THREADS:-2}" NPBENCH_REPEATS="${NPBENCH_REPEATS:-5}" NPBENCH_FRESH_PROCESSES="${NPBENCH_FRESH_PROCESSES:-3}"
+export NPBENCH_REQUIRE_GOLDEN=1
 out="${2:-$repo/.cache/large-runs/$(date -u +%Y%m%dT%H%M%SZ)-affected-retry}"
 exec bash "$repo/run_large.sh" baselines "$out"

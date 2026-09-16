@@ -188,12 +188,13 @@ class LifecycleTest(unittest.TestCase):
 
 class ReuseClassificationTest(unittest.TestCase):
     def test_dace_restore_reports_original_deserialization_error_without_compiling(self):
+        import dace  # Import backend dependencies before mocking implementation imports.
         from npbench.infrastructure.dace_framework import DaceRestoreError
         framework = generate_framework('dace_cpu')
         bench = Benchmark('gemm')
         saved = json.dumps({'schema': 2, 'label': 'fusion', 'version': framework.version(),
                             'build_folder': 'dace-cache/fusion'})
-        with patch('dace.sdfg.utils.load_precompiled_sdfg', side_effect=TypeError('Offset must be the same size as shape')), \
+        with patch('npbench.infrastructure.dace_restore.load_artifact', side_effect=TypeError('Offset must be the same size as shape')), \
                 patch('pathlib.Path.read_text', return_value=saved), \
                 patch.object(framework, 'implementations', side_effect=AssertionError('compiled')), \
                 patch('npbench.infrastructure.dace_framework.importlib.import_module'):
@@ -268,7 +269,7 @@ class ReuseClassificationTest(unittest.TestCase):
         bench = Benchmark('gemm')
         request = {'benchmark': 'gemm', 'preset': 'S', 'framework': 'numpy',
                    'golden_cache': '/unused', 'implementation_sources': {},
-                   'version': 'unit', 'expected_artifacts': {'missing.so': {}}}
+                   'version': 'unit', 'process_index': 0, 'samples_file': 'samples.jsonl', 'implementation': 'default', 'expected_artifacts': {'missing.so': {}}}
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as stream:
             json.dump(request, stream); stream.flush()
             with patch('npbench.infrastructure.lifecycle.golden.load_or_create', return_value=({'arrays': {}, 'inputs': {}}, {})), \
@@ -276,8 +277,29 @@ class ReuseClassificationTest(unittest.TestCase):
                     patch('npbench.infrastructure.lifecycle.artifact_state', return_value={}), \
                     patch('npbench.infrastructure.framework.Framework.version', return_value='unit'), \
                     patch('npbench.infrastructure.lifecycle.Region', side_effect=AssertionError('implementation imported')):
-                with self.assertRaisesRegex(ValueError, 'Artifact integrity'):
-                    worker(stream.name)
+                with patch('npbench.infrastructure.lifecycle._append') as append:
+                    self.assertEqual(worker(stream.name), 1)
+                    row = append.call_args.args[1]
+                    self.assertEqual(row['failure_stage'], 'artifact_integrity')
+                    self.assertIn('Artifact integrity', row['error'])
+
+    def test_worker_rejects_replaced_golden_before_loading_implementation(self):
+        from npbench.infrastructure.lifecycle import worker
+        request = {'benchmark': 'gemm', 'preset': 'S', 'framework': 'numpy',
+                   'golden_cache': '/unused', 'golden_sha256': 'controller-payload',
+                   'implementation': 'default', 'version': 'unit',
+                   'process_index': 0, 'samples_file': 'samples.jsonl'}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as stream:
+            json.dump(request, stream); stream.flush()
+            with patch('npbench.infrastructure.lifecycle.golden.load_or_create',
+                       return_value=({}, {'key': 'same-identity', 'sha256': 'different-payload'})), \
+                    patch('npbench.infrastructure.lifecycle.Region', side_effect=AssertionError('implementation imported')), \
+                    patch('npbench.infrastructure.lifecycle._append') as append:
+                self.assertEqual(worker(stream.name), 1)
+                row = append.call_args.args[1]
+                self.assertEqual(row['failure_stage'], 'load_golden')
+                self.assertIsNone(row['time'])
+                self.assertIn('Golden payload changed', row['error'])
 
 
 if __name__ == '__main__':

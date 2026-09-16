@@ -44,13 +44,14 @@ class Region:
             context[argument] = copy(data[name]) if device_inputs and name in bench.info['array_args'] else data[name]
         self.stage = 'execute'
         exec(self.statement, context)
+        self.stage = 'synchronize'
+        fw.synchronize()
         self.stage = 'materialize'
         result = fw.normalize_returns([to_host(value) for value in outputs(context['__npb_result'])],
                                       self.scalar_returns)
         for name, argument in zip(bench.info['input_args'], fw.args(bench, self.impl)):
             if name in self.writebacks and device_inputs:
                 np.copyto(data[name], to_host(context[argument]), casting='no')
-        fw.synchronize()
         self.context = context
         return result
 

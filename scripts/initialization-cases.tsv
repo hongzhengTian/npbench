@@ -1,0 +1,11 @@
+gemm	numpy	default
+gemm	numba	nopython-mode
+gemm	dace_cpu	auto_opt
+gemm	dace_gpu	auto_opt
+gemm	cupy	default
+gemm	cova_llvm_cpu	default
+gemm	cova_llvm_cpu_serial	default
+gemm	cova_llvm_gpu	default
+gemm	cova_openmp_cpu	default
+gemm	cova_openmp_gpu	default
+gemm	cova_serial_cpu	default

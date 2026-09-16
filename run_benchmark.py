@@ -50,8 +50,8 @@ if __name__ == "__main__":
     parser.add_argument('--implementation', help='Select a single lifecycle implementation label')
     parser.add_argument('--run-dir', help='Parent directory for isolated lifecycle runs')
     args = vars(parser.parse_args())
-    if args['repeat'] < 1 or args['fresh_process_runs'] < 0 or args['timeout'] <= 0:
-        parser.error('Repeat/timeout must be positive and fresh-process-runs nonnegative')
+    if args['repeat'] < (0 if args['lifecycle'] else 1) or args['fresh_process_runs'] < 0 or args['timeout'] <= 0:
+        parser.error('Timeout must be positive; repeat may be zero only for lifecycle; fresh-process-runs must be nonnegative')
     if args['require_golden'] and not (args['golden_cache'] or args['lifecycle'] or args['prepare_golden']):
         parser.error('--require-golden needs --golden-cache or --lifecycle')
     if args['implementation'] and not args['lifecycle']:

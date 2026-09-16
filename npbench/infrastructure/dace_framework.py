@@ -40,7 +40,7 @@ class DaceFramework(Framework):
     def synchronize(self):
         if self.uses_device_arrays():
             import cupy
-            cupy.cuda.get_current_stream().synchronize()
+            cupy.cuda.runtime.deviceSynchronize()
 
     def copy_func(self) -> Callable:
         """ Returns the copy-method that should be used 
@@ -83,7 +83,7 @@ class DaceFramework(Framework):
             nonlocal compiled
             if compiled is None:
                 if restore:
-                    from dace.sdfg.utils import load_precompiled_sdfg
+                    from .dace_restore import load_artifact
                     info = json.loads(record.read_text())
                     if info['label'] != label or info['version'] != self.version():
                         raise ValueError('Incompatible DaCe artifact')
@@ -95,7 +95,7 @@ class DaceFramework(Framework):
                         # Do not hide malformed serialized descriptors behind
                         # DaCe's generic SerializableObject fallback.
                         with set_temporary('testing', 'deserialize_exception', value=True):
-                            compiled = load_precompiled_sdfg(str(folder))
+                            compiled = load_artifact(folder, audit_path=Path('dace-restore.json'))
                     except Exception as error:
                         raise DaceRestoreError(f'DaCe artifact restoration failed: {type(error).__name__}: {error}') from error
                 else:
