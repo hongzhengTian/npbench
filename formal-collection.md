@@ -126,6 +126,7 @@ python /path/to/new/evidence-directory/analyze_collection.py \
 Duplicate cells are rejected unless --replace-cova explicitly selects later whole CoVA cells in the same comparison group with the same golden identity and payload hash.
 Different presets and resource/metric/environment groups are kept separate, never pooled merely because benchmark names match.
 The exporter includes portable compressed observations, one compressed text/source/log archive per collection, available golden metadata and the analyzer with SHA-256 checksums.
+Text build configuration such as DaCe .conf, CMake .make and generated .ptx is retained; compiled binaries and numerical array payloads are not exported.
 Large arrays and native binaries remain in external storage; the original paths/hashes in manifests locate them.
 Compressed evidence files are limited to 50 MiB each, with oversized raw text exclusions recorded explicitly.
 Frozen evidence verification is read-only; rebuilding analysis requires an output outside the archive.
@@ -137,13 +138,19 @@ The analysis directory contains:
 | summary.json | Source cell-attempt counts and separate counts after explicit CoVA replacement |
 | lifecycles.csv | Eligibility, median of process medians, process distributions, resource review flags and observed wall-time components |
 | failures.json | Contract/numerical/stage categories and original terminal records; stage alone is not proof of upstream responsibility |
-| best-observed.csv | Fastest eligible observed baseline and post-hoc best CoVA, grouped by device, lifecycle, golden and compatible environment |
+| best-observed.csv | Fastest eligible observed baseline and post-hoc best CoVA with each candidate's eligibility, sample/process counts, variability and confirmation limits |
+| qualification-summary.json | Counts of observed best candidates requiring sampling or variability review, separately by device and lifecycle |
 | initialization-trials.json | Independent cold samples and whether the minimum three successful trials were obtained |
 | replacements.json | Explicit whole-CoVA-cell replacement audit for later comparisons |
 
 Missing or adverse resource evidence is excluded from best-observed comparisons.
 Numerical failures exclude all three phases from ranking; persistence-only failure and memory-only policies preserve explicitly qualified process-0 observations.
 Incomplete attempts, absent validation, wrong identity and malformed pass records do not become valid timings.
+Between-process max/min is absent for a single process; a value of 1 is not invented to imply stability.
+Process-0-only results remain explicitly qualified observations, not evidence of persistent reuse or independent-process stability.
+A ratio above 1.2 is a review flag, not a confidence interval or significance test.
+Resource evidence limits distinguish missing interval-wide isolation and unverified NUMA policy from adverse resource observations that exclude ranking.
+No flag does not establish stability: confirmation_status remains pending_independent_review, and within_15_percent_confirmed is unset.
 A single initialization sample is descriptive; the two main fresh-process observations cannot establish a reliable tail distribution.
 Close differences and process variability require more independent observations before claiming a small advantage.
 The 15% point-estimate flag means CoVA time <= 1.15 times the fastest qualified observed baseline, not a statistical significance claim or an automatic-selection result.

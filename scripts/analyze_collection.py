@@ -13,6 +13,10 @@ import statistics
 import tarfile
 
 PHASES = ('initialization', 'fresh_process', 'same_process')
+TEXT_SUFFIXES = {'.log', '.txt', '.tsv', '.csv', '.json', '.jsonl', '.sh', '.md',
+                 '.patch', '.py', '.c', '.cpp', '.cu', '.cuh', '.h', '.hpp',
+                 '.sdfg', '.ll', '.mlir', '.cmake', '.conf', '.make', '.ptx',
+                 '.yaml', '.yml', '.toml', '.ini', '.cfg', '.rst'}
 
 
 def digest(path):
@@ -206,14 +210,36 @@ def analyze(bundles, *, replace_cova=False):
             for row in observed: grouped[row['process_index']].append(row['time'])
             medians = {str(k): statistics.median(values) for k, values in sorted(grouped.items())}
             summary = statistics.median(medians.values()) if medians else None
-            ratio = max(medians.values())/min(medians.values()) if medians else None
+            ratio = max(medians.values())/min(medians.values()) if len(medians) > 1 else None
             qualification = eligible[phase]
             if 'process0_only' in qualification:
                 summary = medians.get('0')
             if cell['exit_code'] is None: qualification = 'not_completed'
+            sampling_review = []
+            if phase == 'initialization' and medians:
+                sampling_review.append('single_initialization_observation')
+            elif phase == 'fresh_process' and len(medians) < 2:
+                sampling_review.append('fewer_than_two_later_processes')
+            elif phase == 'same_process' and len(medians) < 3:
+                sampling_review.append('fewer_than_three_processes')
+            if 'process0_only' in qualification:
+                sampling_review.append('process0_only')
+            variability_review = bool(ratio and ratio > 1.2)
+            # Availability is not interval-wide isolation, and no statistical
+            # confirmation is inferred from a lack of dispersion flags.
+            resource_limits = ['no_interval_isolation_evidence']
+            numa = contract.get('allocation', {}).get('numa_policy')
+            if not numa or str(numa).startswith('unavailable'):
+                resource_limits.append('numa_policy_unverified')
             row = dict(base, phase=phase, eligibility=qualification, observed_samples=len(observed),
+                       observed_processes=len(medians),
+                       samples_by_process_json=json.dumps({str(k): len(v) for k, v in sorted(grouped.items())}),
                        process_medians_json=json.dumps(medians), median_seconds=summary,
-                       process_max_min_ratio=ratio, precision_review_required=bool(ratio and ratio > 1.2),
+                       process_max_min_ratio=ratio, process_variability_review_required=variability_review,
+                       sampling_review=';'.join(sampling_review),
+                       resource_evidence_limits=';'.join(resource_limits),
+                       precision_review_required=bool(sampling_review or variability_review),
+                       confirmation_status='pending_independent_review',
                        initialization_single_sample=phase == 'initialization')
             table.append(row)
         if categories:
@@ -232,13 +258,23 @@ def analyze(bundles, *, replace_cova=False):
         reference = min(baselines, key=lambda r: r['median_seconds'])
         candidate = min(cova, key=lambda r: r['median_seconds']) if cova else None
         ratio = candidate['median_seconds']/reference['median_seconds'] if candidate else None
-        best.append({'comparison_key':key[0], 'benchmark':key[1], 'device':key[2], 'phase':key[3], 'golden_key':key[4], 'golden_sha256':key[5], 'preset':key[6],
+        selected_row = {'comparison_key':key[0], 'benchmark':key[1], 'device':key[2], 'phase':key[3], 'golden_key':key[4], 'golden_sha256':key[5], 'preset':key[6],
                      'baseline':reference['framework']+'/'+reference['implementation'], 'baseline_seconds':reference['median_seconds'],
                      'cova_posthoc_best':candidate['framework']+'/'+candidate['implementation'] if candidate else None,
                      'cova_seconds':candidate['median_seconds'] if candidate else None, 'cova_time_ratio':ratio,
                      'within_15_percent_point_estimate':ratio <= 1.15 if ratio is not None else None,
+                     'within_15_percent_confirmed':None,
+                     'comparison_qualification':'descriptive_only_pending_confirmation',
                      'interpretation':'observed_posthoc_best_not_automatic_selection_or_certified_ranking',
-                     'resource_review':';'.join(sorted({r['resource_review'] for r in values if r['resource_review']}))})
+                     'resource_review':';'.join(sorted({r['resource_review'] for r in values if r['resource_review']}))}
+        for prefix, selected_value in [('baseline', reference), ('cova', candidate)]:
+            for field in ('eligibility', 'observed_samples', 'observed_processes',
+                          'samples_by_process_json', 'process_medians_json', 'process_max_min_ratio',
+                          'process_variability_review_required', 'sampling_review',
+                          'precision_review_required', 'resource_evidence_limits',
+                          'confirmation_status', 'formal_comparison_eligibility'):
+                selected_row[prefix + '_' + field] = selected_value[field] if selected_value else None
+        best.append(selected_row)
     cold = []
     trials = defaultdict(list)
     for row in table:
@@ -269,15 +305,28 @@ def write_report(bundles, destination, *, replace_cova=False):
     counts=Counter('not_completed' if c['exit_code'] is None else 'passed' if c['exit_code']==0 else 'partial' if c['exit_code']==2 else 'failed_or_blocked' for c in cells)
     selected_cells=[r for r in table if r['phase']=='initialization']
     selected_counts=Counter('not_completed' if r['exit_code'] is None else 'passed' if r['exit_code']==0 else 'partial' if r['exit_code']==2 else 'failed_or_blocked' for r in selected_cells)
-    summary={'schema':1,'collections':len(bundles),'cell_attempts':len(cells),'terminal_counts':dict(counts),
+    summary={'schema':2,'collections':len(bundles),'cell_attempts':len(cells),'terminal_counts':dict(counts),
              'selected_cells':len(selected_cells),'selected_terminal_counts':dict(selected_counts),
              'aggregate_speedup':None,'note':'No cross-configuration aggregate; inspect paired sets, coverage, resources and process grouping.'}
     (destination/'summary.json').write_text(json.dumps(summary,indent=2,sort_keys=True)+'\n')
+    qualification = []
+    for device in ('cpu', 'gpu'):
+        for phase in PHASES:
+            selected = [row for row in best if row['device'] == device and row['phase'] == phase]
+            qualification.append({'device': device, 'phase': phase, 'observed_best_count': len(selected),
+                                  'variability_review_count': sum(row['baseline_process_variability_review_required'] for row in selected),
+                                  'sampling_review_count': sum(bool(row['baseline_sampling_review']) for row in selected),
+                                  'process0_only_count': sum(row['baseline_eligibility'] == 'observed_pass_process0_only' for row in selected),
+                                  'confirmed_count': 0})
+    (destination/'qualification-summary.json').write_text(json.dumps(qualification, indent=2, sort_keys=True)+'\n')
     lines=['# NPBench collection analysis','',json.dumps(summary,ensure_ascii=False),'',
            'Functional observations and conditional timing summaries; no automatic publication certification.',
            'same_process uses the median of per-process medians; raw process summaries remain in lifecycles.csv.',
            'A numerical failure excludes all phases. Unsupported persistence and restore-only failures are scoped explicitly.',
            'best-observed.csv is a post-hoc comparison within compatible resource/metric/golden groups, not an automatic selector result.',
+           'Best rows retain eligibility, process/sample counts and review flags; one process has no between-process ratio.',
+           'Precision flags include insufficient sampling and observed dispersion. No flag is not statistical confirmation.',
+           'Collection preflight does not establish interval-wide isolation; confirmation remains pending for all rows.',
            'GPU occupancy gaps and other resource review flags must be resolved before strong performance claims.',
            'Single initialization observations are descriptive; independent cold trials are summarized separately.',
            'Detailed attribution requires original logs; error categories do not by themselves prove an upstream cause.','']
@@ -302,7 +351,7 @@ def export(bundles, roots, destination):
             archive=destination/f'raw-{number}.tar.gz'
             with archive.open('wb') as stream, gzip.GzipFile(fileobj=stream,mode='wb',mtime=0,filename='') as zipped, tarfile.open(fileobj=zipped,mode='w|') as tar:
                 for path in sorted(root.rglob('*')):
-                    if not path.is_file() or path.suffix not in ('.log','.txt','.tsv','.json','.jsonl','.sh','.md','.patch','.py','.cpp','.cu','.sdfg') or 'analysis' in path.relative_to(root).parts: continue
+                    if not path.is_file() or (path.suffix not in TEXT_SUFFIXES and path.name not in ('CMakeLists.txt', 'Makefile')) or 'analysis' in path.relative_to(root).parts: continue
                     if path.stat().st_size>50*1024*1024:
                         index['excluded_large_or_binary'].append({'path':str(path),'sha256':digest(path),'size':path.stat().st_size});continue
                     info=tarfile.TarInfo(str(path.relative_to(root)));info.size=path.stat().st_size

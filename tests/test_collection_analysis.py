@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import tarfile
 import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -22,6 +23,52 @@ def fixture(framework='numpy',repeat=2,fresh=2):
 
 
 class AnalysisTest(unittest.TestCase):
+    def test_best_observation_carries_uncertainty_and_does_not_certify(self):
+        b=fixture(); candidate=fixture('cova_llvm_cpu')
+        for row in candidate['cells'][0]['records']: row['time'] *= .9
+        best=next(r for r in a.analyze([b,candidate])[2] if r['phase']=='same_process')
+        self.assertEqual(best['baseline_observed_processes'],3)
+        self.assertEqual(best['baseline_observed_samples'],6)
+        self.assertTrue(best['baseline_process_variability_review_required'])
+        self.assertTrue(best['within_15_percent_point_estimate'])
+        self.assertIsNone(best['within_15_percent_confirmed'])
+        self.assertEqual(best['baseline_confirmation_status'],'pending_independent_review')
+        self.assertIn('no_interval_isolation_evidence',best['baseline_resource_evidence_limits'])
+
+    def test_single_process_partial_is_not_reported_as_stable(self):
+        b=fixture('numba');cell=b['cells'][0]
+        cell['records']=cell['records'][:3]+[dict(process_index=1,call_index=0,phase='fresh_process',status='reuse_unsupported',golden_key='golden',metric_version=3,protocol_version=5)]
+        cell['manifest']['status']='partial';cell['exit_code']=2
+        best=next(r for r in a.analyze([b])[2] if r['phase']=='same_process')
+        self.assertEqual(best['baseline_eligibility'],'observed_pass_process0_only')
+        self.assertEqual(best['baseline_observed_processes'],1)
+        self.assertIsNone(best['baseline_process_max_min_ratio'])
+        self.assertTrue(best['baseline_precision_review_required'])
+        self.assertIn('process0_only',best['baseline_sampling_review'])
+        self.assertFalse(best['baseline_process_variability_review_required'])
+
+    def test_low_dispersion_still_requires_confirmation_and_cold_repetition(self):
+        b=fixture()
+        for row in b['cells'][0]['records']:row['time']=1.
+        best=a.analyze([b])[2]
+        same=next(r for r in best if r['phase']=='same_process')
+        cold=next(r for r in best if r['phase']=='initialization')
+        self.assertFalse(same['baseline_precision_review_required'])
+        self.assertEqual(same['baseline_confirmation_status'],'pending_independent_review')
+        self.assertIn('single_initialization_observation',cold['baseline_sampling_review'])
+
+    def test_export_retains_build_configuration_text_without_native_binaries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);source=root/'source';source.mkdir()
+            (source/'dace.conf').write_text('compiler: cpu\n')
+            (source/'build.make').write_text('target: source.cpp\n')
+            (source/'lib.so').write_bytes(b'not a text artifact')
+            b=fixture();b['cells'][0]['collection']=str(source)
+            b['cells'][0]['manifest']['golden']['path']=str(root/'absent-golden-payload')
+            a.export([b],[source],root/'evidence')
+            with tarfile.open(root/'evidence/raw-0.tar.gz') as tar:
+                self.assertEqual(set(tar.getnames()),{'dace.conf','build.make'})
+
     def test_nine_calls_grouped_by_process_and_validation_failure_excludes_early_passes(self):
         b=fixture();cell=b['cells'][0]
         table,*_=a.analyze([b]);same=next(r for r in table if r['phase']=='same_process')
