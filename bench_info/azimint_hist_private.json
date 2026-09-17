@@ -1,0 +1,57 @@
+{
+    "benchmark": {
+        "name": "Azimuthal Integration - Histogram (corrected variant: private_parallel_histograms)",
+        "short_name": "azimint_hist_private",
+        "relative_path": "azimint_hist",
+        "module_name": "azimint_hist_private",
+        "func_name": "azimint_hist",
+        "kind": "microapp",
+        "domain": "Physics",
+        "dwarf": "spectral_methods",
+        "parameters": {
+            "S": {
+                "N": 400000,
+                "npt": 1000
+            },
+            "M": {
+                "N": 4000000,
+                "npt": 1000
+            },
+            "L": {
+                "N": 40000000,
+                "npt": 1000
+            },
+            "paper": {
+                "N": 1000000,
+                "npt": 1000
+            }
+        },
+        "init": {
+            "func_name": "initialize",
+            "input_args": [
+                "N"
+            ],
+            "output_args": [
+                "data",
+                "radius"
+            ]
+        },
+        "input_args": [
+            "data",
+            "radius",
+            "npt"
+        ],
+        "array_args": [
+            "data",
+            "radius"
+        ],
+        "output_args": [],
+        "repair": {
+            "original_benchmark": "azimint_hist",
+            "kind": "private_parallel_histograms",
+            "changes_reference": false,
+            "documentation": "docs/workload-repairs.md"
+        },
+        "optional": true
+    }
+}

@@ -1,0 +1,12 @@
+{
+  "npbench/benchmarks/azimint_hist/azimint_hist_numba_npr.py": "61ea2d3bee6ae6420971ebb383d18543b787d74cd9db6e659955791f321defbb",
+  "npbench/benchmarks/deep_learning/mlp/mlp_numba_n.py": "d89242503141f0664c7c94639e748a97d911ef0134e6f3473d4692bc29f2af91",
+  "npbench/benchmarks/deep_learning/mlp/mlp_numba_np.py": "4e6f4163fc3aebd912af40eb4b8ba8df9624c4b455acae4b5bf76ef13a9fddef",
+  "npbench/benchmarks/deep_learning/mlp/mlp_numba_npr.py": "305f9980eec2e65e3e93ba2921b0b3fe57972becef41c6578db8a785f0971355",
+  "npbench/benchmarks/polybench/adi/adi_cupy.py": "e9d975e934d5fb0bd0f76d79508d7ae38088b0432aa69f0912d485bccd23f6a8",
+  "npbench/benchmarks/polybench/adi/adi_dace.py": "ed1ccd91a7350dc2d913671bf0e107c1c1cdb510fd6806ff71591f7c3a6b4b93",
+  "npbench/benchmarks/polybench/adi/adi_numba_n.py": "b263f3417fb1232b67cc522335d24e5850b385e130ae7d99694241d6f74f3d89",
+  "npbench/benchmarks/polybench/adi/adi_numba_np.py": "77a9d72d0094feb7df957266b562f8b14eab8765795680e590746be9dfbc100b",
+  "npbench/benchmarks/polybench/adi/adi_numpy.py": "76519e7a3df280f611899d6e17ef825f4978596860a9ab194ad95b1af9a0d5e1",
+  "npbench/benchmarks/polybench/correlation/correlation_cupy.py": "9b3c19fe60b2833b94efc71faeb035354c69987ca8a10737d588bfef3ee75c38"
+}

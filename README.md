@@ -203,3 +203,5 @@ NPBench is a collection of scientific Python/NumPy codes from various domains th
 Optional [golden reuse and host-to-host lifecycle measurements](lifecycle.md) retain the native runner and keep their results separate.
 
 Use [run_large.sh](run_large.sh) for sequential, resumable L-preset collection and later CoVA-only runs; see the [collection guide](formal-collection.md).
+
+[Explicit workload repairs](docs/workload-repairs.md) preserve upstream implementations and use opt-in registrations with audited reference contracts.

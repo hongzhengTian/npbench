@@ -1,4 +1,6 @@
 import json
+import copy
+import importlib
 from pathlib import Path
 import tempfile
 import unittest
@@ -19,6 +21,57 @@ class GoldenTest(unittest.TestCase):
 
     def get(self, **options):
         return golden.load_or_create(self.bench, 'unit', self.numpy, self.tmp.name, **options)
+
+    def alias(self):
+        alias = copy.copy(self.bench)
+        alias.bname = 'explicit_variant'
+        alias.info = copy.deepcopy(self.bench.info)
+        alias.info['module_name'] = 'variant_without_a_reference_module'
+        alias.info['golden_reference'] = self.bench.bname
+        return alias
+
+    def test_explicit_alias_reuses_exact_bundle_without_initializer(self):
+        bundle, first = self.get()
+        alias = self.alias()
+        with patch.object(importlib.import_module('npbench.infrastructure.benchmark'), 'Benchmark', return_value=self.bench), \
+                patch.object(alias, 'get_data', side_effect=AssertionError('alias initialized')), \
+                patch.object(self.numpy, 'implementations', side_effect=AssertionError('producer executed')):
+            again, event = golden.load_or_create(alias, 'unit', self.numpy, self.tmp.name, required=True)
+            self.assertEqual(golden.identity(alias, 'unit', self.numpy), golden.identity(self.bench, 'unit', self.numpy))
+        self.assertEqual(event['key'], first['key'])
+        self.assertEqual(event['sha256'], first['sha256'])
+        self.assertEqual(event['producer_executions'], 0)
+        for name in bundle['inputs']:
+            np.testing.assert_array_equal(bundle['inputs'][name], again['inputs'][name])
+
+    def test_explicit_alias_rejects_different_numerical_contract(self):
+        for field in ('parameters', 'input_args', 'array_args', 'output_args', 'func_name', 'init'):
+            alias = self.alias()
+            if field == 'parameters': alias.info[field]['unit']['NI'] += 1
+            else: alias.info[field] = None
+            with self.subTest(field=field), patch.object(importlib.import_module('npbench.infrastructure.benchmark'), 'Benchmark', return_value=self.bench):
+                with self.assertRaisesRegex(ValueError, 'contract differs'):
+                    golden.identity(alias, 'unit', self.numpy)
+
+    def test_explicit_alias_rejects_parameter_type_change(self):
+        alias = self.alias()
+        alias.info['parameters']['unit']['NI'] = float(alias.info['parameters']['unit']['NI'])
+        with patch.object(importlib.import_module('npbench.infrastructure.benchmark'), 'Benchmark', return_value=self.bench):
+            with self.assertRaisesRegex(ValueError, 'parameters'):
+                golden.identity(alias, 'unit', self.numpy)
+
+    def test_explicit_alias_rejects_reference_chains(self):
+        alias = self.alias()
+        with patch.object(importlib.import_module('npbench.infrastructure.benchmark'), 'Benchmark', return_value=alias):
+            with self.assertRaisesRegex(ValueError, 'directly'):
+                golden.identity(alias, 'unit', self.numpy)
+
+    def test_explicit_alias_required_miss_does_not_run_producer(self):
+        alias = self.alias()
+        with patch.object(importlib.import_module('npbench.infrastructure.benchmark'), 'Benchmark', return_value=self.bench), \
+                patch.object(self.numpy, 'implementations', side_effect=AssertionError('producer')):
+            with self.assertRaises(FileNotFoundError):
+                golden.load_or_create(alias, 'unit', self.numpy, self.tmp.name, required=True)
 
     def test_hit_needs_no_initializer_or_reference(self):
         bundle, first = self.get()

@@ -1,0 +1,15 @@
+adi_corrected	numpy	default
+adi_corrected	numba	nopython-mode
+adi_corrected	numba	nopython-mode-parallel
+adi_corrected	dace_cpu	fusion
+adi_corrected	dace_cpu	parallel
+adi_corrected	dace_cpu	auto_opt
+adi_corrected	dace_gpu	fusion
+adi_corrected	dace_gpu	parallel
+adi_corrected	dace_gpu	auto_opt
+adi_corrected	cupy	default
+correlation_return	cupy	default
+mlp_rowmax	numba	nopython-mode
+mlp_rowmax	numba	nopython-mode-parallel
+mlp_rowmax	numba	nopython-mode-parallel-range
+azimint_hist_private	numba	nopython-mode-parallel-range

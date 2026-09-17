@@ -11,7 +11,7 @@ Usage: ./run_large.sh [--plan] [all|baselines|cova] [RESULT_DIRECTORY]
        ./run_large.sh --analyze RESULT_DIRECTORY [OTHER_COLLECTION ...]
        ./run_large.sh --export RESULT_DIRECTORY EVIDENCE_DIRECTORY
 Activate the prepared CoVA/NPBench environment before running this script.
-Defaults: all registered benchmarks, L, 3 processes x 3 calls (9 total),
+Defaults: all non-optional benchmarks, L, 3 processes x 3 calls (9 total),
 all allocated CPU resources with native runtime defaults, visible GPU 0,
 1800s per complete worker/golden. Existing goldens required.
 --plan freezes and checks configuration without executing benchmarks.
@@ -179,7 +179,11 @@ for key in ('NPBENCH_FRESH_PROCESSES', 'NPBENCH_REPEATS', 'NPBENCH_TIMEOUT', 'NP
     assert value >= (0 if key in ('NPBENCH_FRESH_PROCESSES', 'NPBENCH_REPEATS') else 1), key
 assert os.environ['NPBENCH_PRESET'] in ('S', 'M', 'L', 'paper')
 available = {p.stem for p in (repo/'bench_info').glob('*.json')}
-benchmarks = os.environ.get('NPBENCH_BENCHMARKS', '').split() or sorted(available)
+# Repaired workload variants are opt-in; the upstream campaign stays unchanged.
+# Exact case files and explicit benchmark lists may select them.
+default_benchmarks = sorted(name for name in available if os.environ.get('NPBENCH_CASES_FILE')
+    or not json.loads((repo/'bench_info'/(name+'.json')).read_text())['benchmark'].get('optional', False))
+benchmarks = os.environ.get('NPBENCH_BENCHMARKS', '').split() or default_benchmarks
 assert len(benchmarks) == len(set(benchmarks)) and set(benchmarks) <= available, 'Invalid benchmark selection'
 baselines = ['numpy', 'numba', 'dace_cpu', 'dace_gpu', 'cupy']
 cova = sorted(p.stem for p in (repo/'framework_info').glob('cova_*.json'))

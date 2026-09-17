@@ -1,0 +1,3 @@
+mlp_rowmax	numba	nopython-mode
+mlp_rowmax	numba	nopython-mode-parallel
+mlp_rowmax	numba	nopython-mode-parallel-range

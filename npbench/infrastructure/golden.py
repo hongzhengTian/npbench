@@ -61,7 +61,25 @@ def source_hashes(paths, package_root):
     return dict(sorted(result.items()))
 
 
+def reference_benchmark(bench, preset):
+    """Resolve an explicit shared reference without changing its value identity."""
+    name = bench.info.get('golden_reference')
+    if not name:
+        return bench
+    from .benchmark import Benchmark
+    reference = Benchmark(name)
+    if name == bench.bname or reference.info.get('golden_reference'):
+        raise ValueError('Golden references must point directly to a canonical benchmark')
+    for field in ('input_args', 'array_args', 'output_args', 'func_name', 'init'):
+        if bench.info.get(field) != reference.info.get(field):
+            raise ValueError('Golden reference contract differs: ' + field)
+    if json.dumps(bench.info['parameters'][preset], sort_keys=True) != json.dumps(reference.info['parameters'][preset], sort_keys=True):
+        raise ValueError('Golden reference contract differs: parameters')
+    return reference
+
+
 def identity(bench, preset, numpy):
+    bench = reference_benchmark(bench, preset)
     root = Path(__file__).resolve().parents[2]
     info = bench.info
     sources = [p for p, _ in numpy.impl_files(bench)]
@@ -83,6 +101,7 @@ def clone_data(data):
 
 
 def reference(bench, preset, numpy):
+    bench = reference_benchmark(bench, preset)
     raw = bench.get_data(preset)
     names = set(bench.info['parameters'][preset]) | set(bench.info['input_args'])
     data = clone_data({name: raw[name] for name in names})

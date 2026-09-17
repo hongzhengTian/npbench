@@ -19,6 +19,12 @@ class CovaCatalogTest(unittest.TestCase):
         self.assertEqual(len(FRAMEWORKS), 6)
         for metadata in sorted((ROOT / 'bench_info').glob('*.json')):
             bench = Benchmark(metadata.stem)
+            if bench.info.get('optional') and 'repair' in bench.info:
+                # Explicit baseline-only repair registrations do not claim CoVA support.
+                self.assertNotIn('cova', bench.info)
+                for name in FRAMEWORKS:
+                    self.assertFalse(generate_framework(name).impl_files(bench)[0][0].is_file())
+                continue
             contract = bench.info['cova']
             self.assertIsInstance(contract['return_count'], int)
             self.assertGreaterEqual(contract['return_count'], 0)

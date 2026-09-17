@@ -151,3 +151,11 @@ Historical two-thread measurements have a different resource policy and remain d
 
 For failures in the original pre-protocol-3 collection, retry_affected.sh selects only the baseline implementations affected by the prior cache-location, cache-capability and confirmed scalar-return fixes.
 Its old selection remains historical; use a new exact selection with run_large.sh for other follow-ups.
+
+### Explicit shared golden references
+
+An opt-in benchmark variant may set `golden_reference` in its benchmark metadata to name a canonical benchmark.
+The input/array/output arguments, function and initialization contract, and selected preset parameters must match; reference chains are rejected.
+The canonical benchmark owns reference source identity and input/output generation, so the variant reuses exactly the same golden key and payload, including otherwise unseeded random inputs.
+This does not change measurement code or validation tolerances; the variant must still pass the reference contract.
+Use a separate reference for mathematical workload changes such as `adi_corrected`.

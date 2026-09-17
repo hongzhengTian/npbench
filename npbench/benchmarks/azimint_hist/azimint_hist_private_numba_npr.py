@@ -1,0 +1,101 @@
+# Explicit repaired variant; original source is preserved. See docs/workload-repairs.md.
+# Copyright 2014 Jérôme Kieffer et al.
+# This is an open-access article distributed under the terms of the
+# Creative Commons Attribution License, which permits unrestricted use,
+# distribution, and reproduction in any medium, provided the original author
+# and source are credited.
+# http://creativecommons.org/licenses/by/3.0/
+# Jérôme Kieffer and Giannis Ashiotis. Pyfai: a python library for
+# high performance azimuthal integration on gpu, 2014. In Proceedings of the
+# 7th European Conference on Python in Science (EuroSciPy 2014).
+
+# BSD 2-Clause License
+
+# Copyright (c) 2017, Numba
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+import numpy as np
+import numba as nb
+
+# A partition count, not a thread-ID mapping. Use the configured worker budget
+# as a compile-time integer: the runtime getter embeds a process-local ctypes
+# pointer in Numba 0.65 and makes this otherwise portable specialization uncacheable.
+HISTOGRAM_CHUNKS = nb.config.NUMBA_NUM_THREADS
+
+
+@nb.jit(nopython=True, parallel=True, fastmath=True)
+def get_bin_edges_prange(a, bins):
+    bin_edges = np.zeros((bins + 1, ), dtype=np.float64)
+    a_min = a.min()
+    a_max = a.max()
+    delta = (a_max - a_min) / bins
+    for i in nb.prange(bin_edges.shape[0]):
+        bin_edges[i] = a_min + i * delta
+
+    bin_edges[-1] = a_max  # Avoid roundoff error on last point
+    return bin_edges
+
+
+@nb.jit(nopython=True, fastmath=True)
+def compute_bin(x, bin_edges):
+    # assuming uniform bins for now
+    n = bin_edges.shape[0] - 1
+    a_min = bin_edges[0]
+    a_max = bin_edges[-1]
+
+    # special case to mirror NumPy behavior for last bin
+    if x == a_max:
+        return n - 1  # a_max always in last bin
+
+    return int(n * (x - a_min) / (a_max - a_min))
+
+
+@nb.jit(nopython=True, parallel=True, fastmath=True)
+def histogram_prange(a, bins, weights):
+    hist = np.zeros((bins, ), dtype=a.dtype)
+    bin_edges = get_bin_edges_prange(a, bins)
+
+    # Each parallel iteration owns one whole histogram, independently of
+    # scheduler/thread identity. Reduce only after all chunks have completed.
+    chunks = HISTOGRAM_CHUNKS
+    partial = np.zeros((chunks, bins), dtype=a.dtype)
+    for chunk in nb.prange(chunks):
+        start = chunk * a.shape[0] // chunks
+        stop = (chunk + 1) * a.shape[0] // chunks
+        for i in range(start, stop):
+            bin = compute_bin(a[i], bin_edges)
+            partial[chunk, bin] += weights[i]
+    for bin in nb.prange(bins):
+        for chunk in range(chunks):
+            hist[bin] += partial[chunk, bin]
+
+    return hist, bin_edges
+
+
+@nb.jit(nopython=True, parallel=True, fastmath=True)
+def azimint_hist(data, radius, npt):
+    histu = np.histogram(radius, npt)[0]
+    # histw = np.histogram(radius, npt, weights=data)[0]
+    histw = histogram_prange(radius, npt, weights=data)[0]
+    return histw / histu
