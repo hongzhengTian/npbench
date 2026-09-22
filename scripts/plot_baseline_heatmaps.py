@@ -87,15 +87,18 @@ def load_final(evidence):
     return benchmarks, cells, hashes, summary
 
 
-def render(output, phase, benchmarks, cells, norm, summary):
+def render(output, phase, benchmarks, cells, norm, summary, *, columns=None,
+           groups=None, title="Final results", subtitle=None, notes=None,
+           filename_prefix="baseline"):
+    columns = COLUMNS if columns is None else columns
     # Grouped headers, explicit statuses and labelled times follow CoVA's
     # heatmap presentation; absolute shared log colors avoid implying a ranking.
     cmap = plt.get_cmap('viridis')
-    fig = plt.figure(figsize=(23, 29), facecolor='white')
+    fig = plt.figure(figsize=(23 + max(0, len(columns) - len(COLUMNS)) * 1.5, 29), facecolor='white')
     ax = fig.add_axes([.165, .122, .813, .765])
-    ax.set_xlim(-.5, len(COLUMNS) - .5)
+    ax.set_xlim(-.5, len(columns) - .5)
     ax.set_ylim(len(benchmarks) - .5, -.5)
-    ax.set_xticks(range(len(COLUMNS)), [r[2] for r in COLUMNS], fontsize=10)
+    ax.set_xticks(range(len(columns)), [r[2] for r in columns], fontsize=10)
     ax.xaxis.tick_top()
     ax.tick_params(axis='both', length=0, pad=9)
     ax.set_yticks(range(len(benchmarks)), benchmarks, fontsize=10)
@@ -106,7 +109,7 @@ def render(output, phase, benchmarks, cells, norm, summary):
                     'terminated': '#f5cccc', 'timeout': '#f5dfc0', 'limited': '#f4e6b8'}
     lookup = {(c['benchmark'], c['framework'], c['implementation']): c for c in cells if c['phase'] == phase}
     for y, benchmark in enumerate(benchmarks):
-        for x, (fw, impl, _) in enumerate(COLUMNS):
+        for x, (fw, impl, _) in enumerate(columns):
             cell = lookup[(benchmark, fw, impl)]
             value = cell['seconds']
             color = cmap(norm(value)) if value is not None else matplotlib.colors.to_rgba(state_colors[cell['state']])
@@ -114,23 +117,24 @@ def render(output, phase, benchmarks, cells, norm, summary):
             luminance = .2126 * color[0] + .7152 * color[1] + .0722 * color[2]
             ink = '#ffffff' if luminance < .46 else '#182331'
             label = (format_time(value) + (' *' if cell['restricted'] else '') + (' †' if cell.get('repaired') == 'True' else '')) if value is not None else cell['state']
+            label += cell.get('display_suffix', '')
             ax.text(x, y, label, ha='center', va='center', fontsize=10, color=ink, fontweight='medium')
-    groups = [(0, 0, 'NumPy | CPU'), (1, 6, 'Numba | CPU'), (7, 9, 'DaCe | CPU'),
+    groups = groups or [(0, 0, 'NumPy | CPU'), (1, 6, 'Numba | CPU'), (7, 9, 'DaCe | CPU'),
               (10, 12, 'DaCe | GPU'), (13, 13, 'CuPy | GPU')]
-    for start, end, title in groups:
-        ax.text((start+end)/2, 1.047, title, transform=ax.get_xaxis_transform(),
+    for start, end, group_title in groups:
+        ax.text((start+end)/2, 1.047, group_title, transform=ax.get_xaxis_transform(),
                 ha='center', va='bottom', fontsize=13, fontweight='bold', color='#243347')
         if start:
             ax.axvline(start-.5, color='#596575', linewidth=1.5)
-    fig.text(.5, .965, f'NPBench L | {PHASES[phase][0]} | Final results', ha='center', fontsize=25, fontweight='bold', color='#152536')
+    fig.text(.5, .965, f'NPBench L | {PHASES[phase][0]} | {title}', ha='center', fontsize=25, fontweight='bold', color='#152536')
     fig.text(.5, .946, PHASES[phase][1], ha='center', fontsize=12, color='#455466')
-    fig.text(.5, .931, f'{len(benchmarks)} workloads | 14 framework routes, explicit repairs marked † | 96 logical CPUs offered, one A100X',
+    fig.text(.5, .931, subtitle or f'{len(benchmarks)} workloads | 14 framework routes, explicit repairs marked † | 96 logical CPUs offered, one A100X',
              ha='center', fontsize=11, color='#455466')
     bar = fig.add_axes([.30, .093, .52, .008])
     cbar = fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap), cax=bar, orientation='horizontal')
     cbar.ax.tick_params(labelsize=10)
     cbar.set_label('Region time (seconds, shared logarithmic scale) | darker = shorter | not a certified ranking', fontsize=11)
-    notes = [
+    notes = notes if notes is not None else [
         'One selected value per implementation and lifecycle. New qualified measurements replace old values; samples are never pooled across batches.',
         '* Restricted observation: variability, incomplete recheck, drift, process-0-only or unverified historical reuse. Detailed reasons are in final-results.csv.',
         'validation/error/terminated/timeout: excluded timings   unsupported: no persistent reuse   missing: source absent   N/A: variant not registered.',
@@ -142,7 +146,7 @@ def render(output, phase, benchmarks, cells, norm, summary):
     ]
     for i, line in enumerate(notes):
         fig.text(.055, .061 - i*.0074, line, fontsize=10, color='#455466')
-    fig.savefig(output / f'baseline_{phase}_heatmap.png', dpi=160)
+    fig.savefig(output / f'{filename_prefix}_{phase}_heatmap.png', dpi=160)
     plt.close(fig)
 
 
