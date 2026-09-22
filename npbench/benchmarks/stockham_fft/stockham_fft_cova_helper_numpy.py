@@ -1,0 +1,1 @@
+from npbench.benchmarks.stockham_fft.stockham_fft_numpy import stockham_fft

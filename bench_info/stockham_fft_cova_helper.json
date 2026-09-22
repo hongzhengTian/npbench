@@ -1,0 +1,70 @@
+{
+    "benchmark": {
+        "cova": {
+            "return_count": 0,
+            "writeback_args": [
+                "y"
+            ]
+        },
+        "name": "Stockham FFT (CoVA explicit helper)",
+        "short_name": "stockham_fft_cova_helper",
+        "relative_path": "stockham_fft",
+        "module_name": "stockham_fft_cova_helper",
+        "func_name": "stockham_fft",
+        "kind": "microbench",
+        "domain": "Other",
+        "dwarf": "spectral_methods",
+        "parameters": {
+            "S": {
+                "R": 2,
+                "K": 15
+            },
+            "M": {
+                "R": 2,
+                "K": 18
+            },
+            "L": {
+                "R": 2,
+                "K": 21
+            },
+            "paper": {
+                "R": 4,
+                "K": 10
+            }
+        },
+        "init": {
+            "func_name": "initialize",
+            "input_args": [
+                "R",
+                "K"
+            ],
+            "output_args": [
+                "N",
+                "x",
+                "y"
+            ]
+        },
+        "input_args": [
+            "N",
+            "R",
+            "K",
+            "x",
+            "y"
+        ],
+        "array_args": [
+            "x",
+            "y"
+        ],
+        "output_args": [
+            "y"
+        ],
+        "golden_reference": "stockham_fft",
+        "optional": true,
+        "adaptation": {
+            "original_benchmark": "stockham_fft",
+            "kind": "explicit_cova_helper",
+            "changes_reference": false,
+            "documentation": "docs/cova-helpers.md"
+        }
+    }
+}

@@ -1,0 +1,1 @@
+from npbench.benchmarks.azimint_hist.azimint_hist_numpy import azimint_hist

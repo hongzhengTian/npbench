@@ -1,0 +1,79 @@
+{
+    "benchmark": {
+        "cova": {
+            "return_count": 2,
+            "writeback_args": []
+        },
+        "name": "Mandelbrot2 (CoVA explicit helper)",
+        "short_name": "mandel2_cova_helper",
+        "relative_path": "mandelbrot2",
+        "module_name": "mandelbrot2_cova_helper",
+        "func_name": "mandelbrot",
+        "kind": "microbench",
+        "domain": "Other",
+        "dwarf": "unstructured_grids",
+        "parameters": {
+            "S": {
+                "xmin": -2.0,
+                "xmax": 0.5,
+                "XN": 200,
+                "ymin": -1.25,
+                "ymax": 1.25,
+                "YN": 200,
+                "maxiter": 40,
+                "horizon": 2.0
+            },
+            "M": {
+                "xmin": -2.0,
+                "xmax": 0.5,
+                "XN": 500,
+                "ymin": -1.25,
+                "ymax": 1.25,
+                "YN": 500,
+                "maxiter": 80,
+                "horizon": 2.0
+            },
+            "L": {
+                "xmin": -2.25,
+                "xmax": 0.75,
+                "XN": 1000,
+                "ymin": -1.5,
+                "ymax": 1.5,
+                "YN": 1000,
+                "maxiter": 100,
+                "horizon": 2.0
+            },
+            "paper": {
+                "xmin": -2.25,
+                "xmax": 0.75,
+                "XN": 1000,
+                "ymin": -1.25,
+                "ymax": 1.25,
+                "YN": 1000,
+                "maxiter": 200,
+                "horizon": 2.0
+            }
+        },
+        "input_args": [
+            "xmin",
+            "xmax",
+            "ymin",
+            "ymax",
+            "XN",
+            "YN",
+            "maxiter",
+            "horizon"
+        ],
+        "array_args": [],
+        "output_args": [],
+        "norm_error": 0.001,
+        "golden_reference": "mandelbrot2",
+        "optional": true,
+        "adaptation": {
+            "original_benchmark": "mandelbrot2",
+            "kind": "explicit_cova_helper",
+            "changes_reference": false,
+            "documentation": "docs/cova-helpers.md"
+        }
+    }
+}

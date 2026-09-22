@@ -1,0 +1,62 @@
+{
+    "benchmark": {
+        "cova": {
+            "return_count": 1,
+            "writeback_args": []
+        },
+        "name": "Azimuthal Integration - Histogram (CoVA explicit helper)",
+        "short_name": "azimint_hist_cova_helper",
+        "relative_path": "azimint_hist",
+        "module_name": "azimint_hist_cova_helper",
+        "func_name": "azimint_hist",
+        "kind": "microapp",
+        "domain": "Physics",
+        "dwarf": "spectral_methods",
+        "parameters": {
+            "S": {
+                "N": 400000,
+                "npt": 1000
+            },
+            "M": {
+                "N": 4000000,
+                "npt": 1000
+            },
+            "L": {
+                "N": 40000000,
+                "npt": 1000
+            },
+            "paper": {
+                "N": 1000000,
+                "npt": 1000
+            }
+        },
+        "init": {
+            "func_name": "initialize",
+            "input_args": [
+                "N"
+            ],
+            "output_args": [
+                "data",
+                "radius"
+            ]
+        },
+        "input_args": [
+            "data",
+            "radius",
+            "npt"
+        ],
+        "array_args": [
+            "data",
+            "radius"
+        ],
+        "output_args": [],
+        "golden_reference": "azimint_hist",
+        "optional": true,
+        "adaptation": {
+            "original_benchmark": "azimint_hist",
+            "kind": "explicit_cova_helper",
+            "changes_reference": false,
+            "documentation": "docs/cova-helpers.md"
+        }
+    }
+}

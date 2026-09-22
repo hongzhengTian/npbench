@@ -1,0 +1,1 @@
+from npbench.benchmarks.mandelbrot2.mandelbrot2_numpy import mandelbrot
