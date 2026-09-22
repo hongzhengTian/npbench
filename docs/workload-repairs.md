@@ -8,7 +8,7 @@ Do not describe measurements of these variants as unmodified upstream NPBench re
 
 | Registration | Affected implementations | Change | Reference |
 | --- | --- | --- | --- |
-| `adi_corrected` | NumPy, Numba n/np, DaCe CPU/GPU, CuPy | Canonical `b = 1 + mul1`; return the mutated `u` | New canonical formula and separate golden; never pool with original ADI |
+| `adi_corrected` | NumPy, Numba n/np, DaCe CPU/GPU, CuPy, CoVA LLVM CPU/GPU | Canonical `b = 1 + mul1`; return the mutated `u` | New canonical formula and separate golden; never pool with original ADI |
 | `correlation_return` | CuPy | Return the already-computed `corr` | Imports original NumPy reference and initializer |
 | `mlp_rowmax` | Numba n/np/npr | Compute each row's maximum for stable softmax, with disjoint row writes | Imports original NumPy reference and initializer |
 | `azimint_hist_private` | Numba npr | Accumulate in independently owned chunk histograms, then reduce | Imports original NumPy reference and initializer |
@@ -18,7 +18,10 @@ The registrations have separate names.
 The other registrations use their own golden keys.
 This uses existing discovery and golden ownership without adding framework-specific bypasses or weakening output, dtype, finite-value or mutation checks.
 The initializer inputs, L sizes and numerical tolerance remain unchanged.
-`adi_corrected` is a distinct scientific workload; future CoVA comparisons must use the same corrected formula and golden.
+`adi_corrected` is a distinct scientific workload; CoVA comparisons use its corrected formula and separate golden.
+The CoVA entry points compile a common corrected kernel whose only difference from the corrected NumPy source is returning the same array twice for the existing result/writeback adapter.
+The focused CoVA test checks this source equivalence and the independent dense-solve oracle; no NumPy reference callback executes inside the compiled call.
+Their qualification is separate from original ADI coverage.
 Other repairs implement the original reference contract and can supplement their original benchmark's final comparison, provided source registration and repaired status remain explicit.
 
 The [PolyBench/C ADI source](https://raw.githubusercontent.com/MatthiasJReisinger/PolyBenchC-4.2.1/master/stencils/adi/adi.c) gives the corrected coefficient.

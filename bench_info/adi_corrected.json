@@ -52,6 +52,12 @@
             "changes_reference": true,
             "documentation": "docs/workload-repairs.md"
         },
-        "optional": true
+        "optional": true,
+        "cova": {
+            "return_count": 1,
+            "writeback_args": [
+                "u"
+            ]
+        }
     }
 }
