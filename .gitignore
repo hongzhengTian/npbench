@@ -134,3 +134,6 @@ dmypy.json
 
 # CoVA generated native artifacts
 .cova_gen/
+
+# Dated scalar result snapshots are maintained evidence.
+!heatmap/**/*.csv

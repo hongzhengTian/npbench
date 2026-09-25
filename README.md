@@ -22,6 +22,8 @@ python plot_results.py
 
 For optional Python 3.10 dependency profiles and native-library setup for NumPy, Numba, DaCe CPU, CuPy, and DaCe GPU, see [Native environment setup](native-environment.md).
 
+Full-run heatmaps and scalar result snapshots are indexed in [heatmap/](heatmap/README.md).
+
 ## Supported Frameworks
 
 Currently, the following frameworks are supported (in alphabetical order):

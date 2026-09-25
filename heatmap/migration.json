@@ -1,0 +1,57 @@
+[
+  {
+    "original": "baseline_fresh_process_heatmap.png",
+    "destination": "heatmap/2026-09-17/baseline_fresh_process_heatmap.png",
+    "sha256": "dedb62688d8e97d84427990c534998ac6f54109a01e944f49fd0508dd8611904"
+  },
+  {
+    "original": "baseline_heatmaps_data.json",
+    "destination": "heatmap/2026-09-17/baseline_heatmaps_data.json",
+    "sha256": "c1a126c7ba8487f3d7e6258ad19f86061b43a8bdcb108f27489eb39267e81340"
+  },
+  {
+    "original": "baseline_initialization_heatmap.png",
+    "destination": "heatmap/2026-09-17/baseline_initialization_heatmap.png",
+    "sha256": "ec9c5ebb8a1f7938c602f8cfb0118b3aece8aa82a7fb0b9856e895e33a7ebf67"
+  },
+  {
+    "original": "baseline_same_process_heatmap.png",
+    "destination": "heatmap/2026-09-17/baseline_same_process_heatmap.png",
+    "sha256": "78975f5f369aa60ab63d01505d4dcd135b784decc5c1f30fe5ac8b9bbe8d2982"
+  },
+  {
+    "original": "baseline_with_cova_fresh_process_heatmap.png",
+    "destination": "heatmap/2026-09-22/baseline_with_cova_fresh_process_heatmap.png",
+    "sha256": "6b428354a6c32b9650d747e3954d7231ced6982f17df457e42c61e59645d2069"
+  },
+  {
+    "original": "baseline_with_cova_heatmaps_data.json",
+    "destination": "heatmap/2026-09-22/baseline_with_cova_heatmaps_data.json",
+    "sha256": "e4da4e53fed1ece5925b14d42520670bba5f67b172b31e9aeafb224397452e7b"
+  },
+  {
+    "original": "baseline_with_cova_initialization_heatmap.png",
+    "destination": "heatmap/2026-09-22/baseline_with_cova_initialization_heatmap.png",
+    "sha256": "89aba40a45c83f16109c826e1375d09d63dbb8d37a0a129a13fa58068df19f5d"
+  },
+  {
+    "original": "baseline_with_cova_notes.md",
+    "destination": "heatmap/2026-09-22/baseline_with_cova_notes.md",
+    "sha256": "4ff7201001427d8ba4e2829e449efd4f1e082be4ba82651d415bf8381ce7f1e0"
+  },
+  {
+    "original": "baseline_with_cova_results.csv",
+    "destination": "heatmap/2026-09-22/baseline_with_cova_results.csv",
+    "sha256": "208b2418edb3b29b6d4ba91d72b268157032b0256286279dd299b515d3dbede4"
+  },
+  {
+    "original": "baseline_with_cova_same_process_heatmap.png",
+    "destination": "heatmap/2026-09-22/baseline_with_cova_same_process_heatmap.png",
+    "sha256": "412b103ce2d776a660cae8e0cb8b8333724def280f946fce641e2c1c94ce42ff"
+  },
+  {
+    "original": "baseline_with_cova_verification.json",
+    "destination": "heatmap/2026-09-22/baseline_with_cova_verification.json",
+    "sha256": "00fdbc3f9f90f80766352a5a60f12092e38ffb0eac06d8e5b69190a1fe2d2826"
+  }
+]

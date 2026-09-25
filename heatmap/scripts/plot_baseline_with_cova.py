@@ -229,7 +229,7 @@ def build_payload(baseline_path, evidence_root):
                    baseline_json_sha256=hashlib.sha256(baseline_bytes).hexdigest(),
                    columns=baseline['columns'] + COVA_COLUMNS, cells=baseline['cells'] + cova,
                    cova_evidence_root=str(evidence_root), cova_source_sha256=evidence.hashes,
-                   selection_owner='scripts/plot_baseline_with_cova.py; chronological whole-cell overrides, no best-time selection',
+                   selection_owner='heatmap/scripts/plot_baseline_with_cova.py; chronological whole-cell overrides, no best-time selection',
                    cova_aggregation='median of process medians; initialization and first restored calls separate',
                    caveats=['Sparse historical observations, not a full matrix on current CoVA.',
                             'Failed cells have no timings; missing corrected ADI routes are not filled from original ADI.',
@@ -264,9 +264,9 @@ def verify_merge(payload, baseline):
 
 def main():
     parser = argparse.ArgumentParser(__doc__)
-    parser.add_argument('--baseline', type=Path, default=Path('baseline_heatmaps_data.json'))
+    parser.add_argument('--baseline', type=Path, required=True)
     parser.add_argument('--evidence-root', type=Path, required=True, help='Research reports/evidence directory')
-    parser.add_argument('--output', type=Path, default=Path('.'))
+    parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     payload = build_payload(args.baseline, args.evidence_root)
     verification = verify_merge(payload, json.loads(args.baseline.read_text()))

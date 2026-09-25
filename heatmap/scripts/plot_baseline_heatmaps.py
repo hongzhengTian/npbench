@@ -153,7 +153,7 @@ def render(output, phase, benchmarks, cells, norm, summary, *, columns=None,
 def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument('--evidence', required=True, type=Path, help='Research evidence containing final-results.csv')
-    parser.add_argument('--output', type=Path, default=Path('.'))
+    parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     evidence = args.evidence.resolve()
     benchmarks, cells, hashes, summary = load_final(evidence)

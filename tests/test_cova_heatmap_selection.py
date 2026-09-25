@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'heatmap' / 'scripts'))
 from plot_baseline_with_cova import aggregate, lifecycle_cells
 
 
