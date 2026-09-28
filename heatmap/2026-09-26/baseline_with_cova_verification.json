@@ -1,0 +1,20 @@
+{
+  "baseline_cells_preserved": 2268,
+  "total_cells": 3240,
+  "cova_cells": 972,
+  "cova_phase_states": {
+    "missing": 12,
+    "observed": 873,
+    "error": 69,
+    "validation": 18
+  },
+  "checks": [
+    "baseline cells unchanged",
+    "unique rectangular matrix",
+    "strict status gating",
+    "matching golden identities",
+    "equal process weighting",
+    "corrected ADI identity"
+  ],
+  "baseline_json_sha256": "c1a126c7ba8487f3d7e6258ad19f86061b43a8bdcb108f27489eb39267e81340"
+}
