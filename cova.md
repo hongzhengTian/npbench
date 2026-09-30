@@ -44,7 +44,11 @@ python -c 'from cova import cova; print("CoVA import available")'
 Without this override, the adapter uses installed `cova` distribution metadata when present, otherwise `source-unversioned`.
 Record any CoVA working-tree diff separately; a commit identifier alone does not describe an edited build.
 Use the same explicit CPU thread budget as other CPU frameworks.
-The word `serial` describes the selected compiler route; linked BLAS libraries still follow their own thread configuration.
+The `serial_cpu` and `llvm_cpu_serial` routes use one computational thread, including library calls.
+Loading a threaded BLAS provider may create idle worker threads before call-local thread control begins; they perform no computation, so serial checks compare process CPU time with wall time rather than counting process threads.
+Serial library helpers temporarily use one BLAS/LAPACK thread and restore the previous provider setting after each call; thread-budget environment variables continue to apply to parallel routes.
+EmitC serial code uses `-fopenmp-simd` for SIMD hints and does not link an OpenMP thread runtime.
+Historical collections before the serial-route correction contain multithreaded EmitC serial results for some dynamic-storage programs and library-configured LLVM serial results; keep those labels distinct when comparing measurements.
 
 GPU runs additionally need a working CUDA driver/toolkit, and OpenMP GPU requires an offload-capable NVHPC `nvc++`.
 Load the site toolchain or expose it explicitly:
