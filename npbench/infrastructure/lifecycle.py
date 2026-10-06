@@ -74,8 +74,14 @@ def worker(request_path):
     worker_started = time.perf_counter()
     from .resources import process_resources
     launch_resources = process_resources()
+    from .resources import check_worker_affinity, configured_threadpools
+    launch_resources['threadpools'] = configured_threadpools()
     event = {}
+    launch_resources['gpu_numa_binding'] = request.get('gpu_numa_binding')
     try:
+        stage = 'worker_affinity'
+        if request.get('gpu_numa_binding', {}).get('status') == 'bound':
+            check_worker_affinity(launch_resources, request['gpu_numa_binding'])
         stage = 'load_benchmark'
         bench = Benchmark(request['benchmark'])
         numpy = generate_framework('numpy')
@@ -134,9 +140,14 @@ def worker(request_path):
             if probe_cpu:
                 from .resources import thread_cpu_snapshot, thread_cpu_activity
                 cpu_before = thread_cpu_snapshot()
+            from .resources import cpu_position, maintain_worker_affinity
+            record['affinity_repairs_before'] = maintain_worker_affinity(request.get('gpu_numa_binding', {}))
+            record['cpu_before_call'] = cpu_position()
             started = time.perf_counter()
             result = region(data)
             record['time'] = time.perf_counter() - started
+            record['affinity_repairs_after'] = maintain_worker_affinity(request.get('gpu_numa_binding', {}))
+            record['cpu_after_call'] = cpu_position()
             if probe_cpu:
                 record['thread_cpu_activity'] = thread_cpu_activity(cpu_before, thread_cpu_snapshot())
             post_started = time.perf_counter()
@@ -231,6 +242,10 @@ def _run(args):
     # Only workers need the actual arrays during measurements.
     bench.bdata.clear()
     framework = generate_framework(args['framework'])
+    from .resources import gpu_numa_plan, worker_launch_command, process_resources, configured_threadpools
+    numa_plan = gpu_numa_plan(framework.fname)
+    controller_resources = process_resources()
+    controller_resources['threadpools'] = configured_threadpools()
     supported = framework.fname in ('numpy', 'numba', 'cupy', 'dace_cpu', 'dace_gpu') or framework.fname.startswith('cova_')
     if not supported:
         raise ValueError('Host-to-host lifecycle adapter is not available for ' + framework.fname)
@@ -257,6 +272,7 @@ def _run(args):
                 'host': os.uname().nodename,
                 'implementation_sources': golden.source_hashes([p for p, _ in framework.impl_files(bench)], package_root),
                 'environment': {k: v for k, v in env.items() if k.startswith(('OMP_', 'COVA_', 'NUMBA_', 'OPENBLAS_', 'MKL_', 'NPBENCH_', 'DACE_', 'CUPY_', 'CUDA'))},
+                'gpu_numa_binding': numa_plan, 'controller_resources': controller_resources,
                 'processes': [], 'cancelled_processes': [], 'artifact_environments': {}, 'status': 'running'}
     (Path.cwd() / 'selected-run.txt').write_text(run_root.name + '\n')
     manifest_file = run_root / 'manifest.json'
@@ -282,10 +298,11 @@ def _run(args):
                        'preset': args['preset'], 'repeat': args['repeat'], 'process_index': process_index,
                        'validate': args['validate'], 'golden_cache': str(cache), 'golden_sha256': event['sha256'], 'version': version,
                        'samples_file': samples_file, 'implementation_sources': manifest['implementation_sources'],
-                       'expected_artifacts': expected_artifacts}
+                       'expected_artifacts': expected_artifacts, 'gpu_numa_binding': numa_plan}
             request_path = cell / (stem + '.request.json')
             request_path.write_text(json.dumps(request))
             command = [sys.executable, '-m', 'npbench.infrastructure.lifecycle', '--worker', str(request_path)]
+            command = worker_launch_command(command, numa_plan)
             (cell / 'current-call.json').unlink(missing_ok=True)
             started = time.monotonic()
             timed_out = False

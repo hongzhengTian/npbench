@@ -201,3 +201,121 @@ def monitor_environment():
             raise FileNotFoundError('Configured NVML monitoring library is missing')
         env['LD_LIBRARY_PATH'] = directory + os.pathsep + env.get('LD_LIBRARY_PATH', '')
     return env
+
+
+GPU_NUMA_FRAMEWORKS = frozenset(('cupy', 'dace_gpu', 'cova_llvm_gpu', 'cova_openmp_gpu'))
+
+
+def parse_cpu_list(value):
+    """Parse Linux cpulist syntax without assuming contiguous node CPUs."""
+    cpus = set()
+    for part in value.strip().split(','):
+        bounds = part.split('-')
+        if len(bounds) not in (1, 2) or any(not x.isdigit() for x in bounds):
+            raise ValueError('Invalid Linux CPU list: ' + value)
+        first, last = int(bounds[0]), int(bounds[-1])
+        if first > last:
+            raise ValueError('Reversed Linux CPU range: ' + part)
+        cpus.update(range(first, last + 1))
+    return sorted(cpus)
+
+
+def gpu_numa_option(environment=None):
+    environment = os.environ if environment is None else environment
+    value = environment.get('NPBENCH_GPU_NUMA_BINDING', 'auto')
+    if value not in ('auto', 'off'):
+        raise ValueError('NPBENCH_GPU_NUMA_BINDING must be auto or off')
+    return value
+
+
+def selected_gpu_pci_address():
+    """CUDA logical device zero honors ordinal/UUID masks and CUDA ordering."""
+    import cupy
+    value = cupy.cuda.runtime.deviceGetPCIBusId(0)
+    if isinstance(value, bytes):
+        value = value.decode('ascii')
+    domain, bus, slot = value.lower().split(':')
+    return f'{int(domain, 16):04x}:{int(bus, 16):02x}:{slot}'
+
+
+def gpu_numa_plan(framework, *, allowed=None, sysfs=Path('/sys'), environment=None):
+    """Resolve placement once in the controller; never widen its allocation."""
+    environment = os.environ if environment is None else environment
+    policy = gpu_numa_option(environment)
+    allowed = sorted(os.sched_getaffinity(0) if allowed is None else allowed)
+    result = {'policy': policy, 'status': 'unbound', 'allowed_cpus': allowed,
+              'parent_allowed_cpus': allowed, 'cuda_visible_devices': environment.get('CUDA_VISIBLE_DEVICES'),
+              'cuda_logical_device': 0, 'memory_policy': 'unchanged'}
+    if framework not in GPU_NUMA_FRAMEWORKS or policy == 'off':
+        result['reason'] = 'cpu_route' if framework not in GPU_NUMA_FRAMEWORKS else 'disabled'
+        return result
+    try:
+        pci = selected_gpu_pci_address()
+        result['pci_address'] = pci
+        device = sysfs / 'bus/pci/devices' / pci
+        node = int((device / 'numa_node').read_text().strip())
+        result['numa_node'] = node
+        if node < 0:
+            result['reason'] = 'unknown_numa_node'
+            return result
+        cpus = parse_cpu_list((device / 'local_cpulist').read_text())
+        result['local_cpus'] = cpus
+        effective = sorted(set(cpus) & set(allowed))
+        if not effective:
+            result['reason'] = 'no_local_cpus_in_allocation'
+            return result
+        result.update(status='bound', allowed_cpus=effective, reason='gpu_local_cpus')
+    except (OSError, RuntimeError, ValueError, ImportError) as error:
+        result['reason'] = type(error).__name__ + ': ' + str(error)
+    return result
+
+
+def worker_launch_command(command, plan):
+    """Apply affinity before Python and numerical libraries initialize."""
+    if plan['status'] == 'bound':
+        return ['taskset', '--cpu-list', ','.join(map(str, plan['allowed_cpus'])), *command]
+    return command
+
+
+def check_worker_affinity(resources, plan):
+    expected = plan['allowed_cpus']
+    if resources['affinity'] != expected or any(cpus != expected for cpus in resources['thread_affinities'].values()):
+        raise ValueError('Worker launch affinity does not match its resource plan')
+
+
+def cpu_position():
+    """Actual calling CPU/node, sampled outside the user-call timer."""
+    import ctypes
+    cpu = ctypes.CDLL(None).sched_getcpu()
+    nodes = sorted(Path(f'/sys/devices/system/cpu/cpu{cpu}').glob('node[0-9]*'))
+    return {'cpu': cpu, 'numa_node': int(nodes[0].name[4:]) if nodes else None}
+
+
+def configured_threadpools():
+    try:
+        from threadpoolctl import threadpool_info
+        return threadpool_info()
+    except ImportError:
+        return None
+
+
+def maintain_worker_affinity(plan):
+    """Clamp runtime-created threads at untimed call boundaries; retain evidence."""
+    repairs = []
+    if plan.get('status') != 'bound':
+        return repairs
+    allowed = set(plan['allowed_cpus'])
+    for thread in Path('/proc/self/task').iterdir():
+        try:
+            tid = int(thread.name)
+            mask = os.sched_getaffinity(tid)
+            if not mask <= allowed:
+                name = (thread / 'comm').read_text().strip()
+                os.sched_setaffinity(tid, mask & allowed or allowed)
+                actual = os.sched_getaffinity(tid)
+                if not actual <= allowed:
+                    raise ValueError('Runtime thread affinity repair failed')
+                repairs.append({'tid': tid, 'name': name, 'before': sorted(mask), 'after': sorted(actual)})
+        except (ProcessLookupError, FileNotFoundError):
+            continue
+    return repairs

@@ -13,13 +13,35 @@ The optional native CPU/CUDA dependency profiles include threadpoolctl for obser
 No dependency is installed by the collection script.
 
 The default NPBENCH_RESOURCE_POLICY=system removes inherited thread-count and affinity-control environment overrides introduced by this integration.
-It does not call taskset, choose a NUMA policy, or force all libraries to use the machine's logical CPU count.
+CPU workers keep the scheduler's affinity; GPU workers use the NUMA rule below.
+No memory policy or library thread count is forced.
 Native serial/parallel implementations and runtime policies remain intact, including any internal thread choices or oversubscription.
 Scheduler affinity is preserved and checked: by default all online CPUs are expected; use NPBENCH_EXPECT_CPUS explicitly for a smaller legitimate allocation.
 Known cgroup CPU quotas below the declared allocation are rejected.
 The fixed policy exists for diagnostics and resource sensitivity, using explicit NPBENCH_THREADS and NPBENCH_CPUSET.
 
 One selected GPU is used; choose CUDA_VISIBLE_DEVICES before collecting.
+`NPBENCH_GPU_NUMA_BINDING=auto` is the default; `off` restores inherited worker affinity.
+It binds only CuPy, DaCe GPU, CoVA LLVM GPU and CoVA OpenMP GPU lifecycle workers.
+NumPy, Numba, DaCe CPU and the four CoVA CPU routes remain unbound.
+CUDA logical device zero resolves the visible ordinal/UUID mask and CUDA enumeration order to its PCI address.
+The resource owner reads that PCI device's sysfs `numa_node` and `local_cpulist`.
+A worker receives the intersection of the local CPUs and the controller's allocation through `taskset`, before Python and numerical libraries initialize.
+An unknown node (-1), unreadable/invalid topology or empty intersection retains inherited affinity and records the reason.
+Taskset does not change memory policy; first-touch allocation keeps the system policy.
+The frozen collection and comparison contract include the option and per-route resolved plans; `--plan` prints these plans without starting workers.
+Each lifecycle manifest records the controller's affinity and configured pools, and each worker sample records its launch affinity, per-thread masks, configured pools and calling CPU/node before and after the timed call.
+The system preflight still checks the controller's full declared allocation and CPU quota.
+At untimed call boundaries, the worker also clamps runtime-created threads that widened their masks and records their names and before/after masks.
+This is userspace affinity, not a cpuset cgroup: a runtime can temporarily widen a new helper during its cold call.
+The first DaCe GPU call exhibited this behavior; subsequent boundaries restored the node mask without moving initialization outside the timer.
+Worker analysis compares launch masks against the frozen per-route CPU set, and rejects threads whose observed masks extend outside a bound GPU node.
+Do not set `NPBENCH_EXPECT_CPUS=48` to bypass the controller's 96-CPU preflight on hsc-12.
+GPU workers there have 48 allowed logical CPUs (24–47 and 72–95), whereas CPU workers retain 96.
+Native pool defaults may change with that smaller mask: the small GEMM validation observed OpenBLAS 64 threads with binding off and 48 with binding on.
+These are configured pool sizes, not observed utilization; internal library budgets remain intact.
+GPU binding therefore also changes the resource offer to mixed GPU programs' host work, and GPU baselines must be recollected under the same rule.
+
 CUDA identity, driver/runtime versions, topology, NUMA observations and effective resource controls are recorded.
 Worker launch affinity and individual thread affinities are distinguished from the calling thread's post-call affinity.
 Thread-pool sizes are configuration observations, not active utilization measurements.
@@ -163,3 +185,89 @@ Older baseline records without these observations retain their original status a
 Collection identity still separates protocol and measurement-source changes: a new directory is required, and protocol-5/6 results must not be silently pooled.
 Any later cross-protocol baseline reuse needs an explicit compatibility review; this observational change alone does not require rerunning all historical baselines.
 A frozen baseline is reusable under its conditions; it is not permanently valid after changing the environment, inputs or measurement contract.
+
+## User-run stage A closing collection
+
+Only the user runs this full collection after reviewing the harness change.
+The following commands run from the NPBench root in the prepared environment on hsc-12.
+They collect the main matrix, with eight baseline control cells before and after it, and record GPU occupancy every ten seconds throughout.
+Use a new output directory; this procedure uses `validation-runs/`, outside existing `.cache` contents.
+The existing golden directory is read through required-hit checks; a missing bundle blocks its cell.
+Native dependency and compiler environment variables must be set as in the reviewed environment before sourcing `scripts/native-env.sh`.
+
+```bash
+set -uo pipefail
+export NPBENCH_PYTHON="${NPBENCH_PYTHON:-../CoVA/covadev/bin/python}"
+export PATH="$(realpath ../CoVA/build/bin):$(dirname "$(realpath "$NPBENCH_PYTHON")"):$PATH"
+export PYTHONPATH="$(pwd):$(realpath ../CoVA):$(realpath ../CoVA/build/python_packages/cova)${PYTHONPATH:+:$PYTHONPATH}"
+export COVAPATH="$(realpath ../CoVA)"
+export NPBENCH_CUDA_ROOT=/usr/local/cuda-12.8 NPBENCH_CUDA_ARCH=80
+export NPBENCH_NATIVE_PREFIX="$(pwd)/.cache/native/usr"
+export ROOT_NVHPC=/HSC/shared/HSC_gpu_multinode/Linux_x86_64/24.1
+export COVA_OPENMP_GPU_CXX="$ROOT_NVHPC/compilers/bin/nvc++"
+export COVA_LLVM_GPU_ARCH=sm_80 COVA_OPENMP_GPU_ARCH=cc80
+export CUDA_VISIBLE_DEVICES=0 NPBENCH_GPU_NUMA_BINDING=auto
+export NPBENCH_RESOURCE_POLICY=system NPBENCH_MEASUREMENT_ROLE=main
+export NPBENCH_PRESET=L NPBENCH_REQUIRE_GOLDEN=1
+export NPBENCH_FRESH_PROCESSES=2 NPBENCH_REPEATS=2
+export NPBENCH_TIMEOUT=1800 NPBENCH_GOLDEN_TIMEOUT=1800
+export NPBENCH_GOLDEN_CACHE="$(pwd)/.cache/goldens"
+export PYTHONDONTWRITEBYTECODE=1
+unset NPBENCH_CASES_FILE NPBENCH_RETRY_FROM NPBENCH_BENCHMARKS NPBENCH_FRAMEWORKS NPBENCH_RESOURCE_PROBE
+unset COVA_LLVM_GPU_LAUNCH_POLICY COVA_LLVM_GPU_SYNC_SCRATCH_REUSE
+source scripts/native-env.sh
+collection_dir="$(pwd)/validation-runs/$(date -u +%Y%m%dT%H%M%SZ)-stage-a-closing"
+mkdir -p "$collection_dir"
+export NPBENCH_GPU_OCCUPANCY_LOG="$collection_dir/gpu-occupancy.jsonl"
+cat > "$collection_dir/controls.tsv" <<'CASES'
+gemm	numba	nopython-mode
+gemm	dace_cpu	auto_opt
+gemm	dace_gpu	auto_opt
+gemm	cupy	default
+gesummv	numba	nopython-mode
+gesummv	dace_cpu	auto_opt
+gesummv	dace_gpu	auto_opt
+gesummv	cupy	default
+CASES
+"$NPBENCH_PYTHON" -u - <<'MONITOR' &
+import datetime, json, os, subprocess, time
+from npbench.infrastructure.resources import monitor_environment
+with open(os.environ['NPBENCH_GPU_OCCUPANCY_LOG'], 'a') as stream:
+    while True:
+        row = {'utc': datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        try:
+            row['compute_apps'] = subprocess.check_output(
+                ['nvidia-smi', '--query-compute-apps=pid,gpu_uuid,used_memory', '--format=csv,noheader,nounits'],
+                text=True, stderr=subprocess.STDOUT, env=monitor_environment(), timeout=10).strip()
+            row['gpu'] = subprocess.check_output(
+                ['nvidia-smi', '--query-gpu=uuid,utilization.gpu,memory.used', '--format=csv,noheader,nounits'],
+                text=True, stderr=subprocess.STDOUT, env=monitor_environment(), timeout=10).strip()
+        except (OSError, subprocess.SubprocessError) as error:
+            row['monitor_error'] = str(error)
+        stream.write(json.dumps(row) + '\n'); stream.flush()
+        time.sleep(10)
+MONITOR
+monitor_pid=$!
+trap 'kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true' EXIT INT TERM
+# Inspect configuration first. This executes no workload kernels.
+bash run_large.sh --plan all "$collection_dir/main" > "$collection_dir/plan.log" 2>&1 || exit $?
+# Each control invocation selects exactly eight implementation cells.
+NPBENCH_CASES_FILE="$collection_dir/controls.tsv" NPBENCH_BENCHMARKS='gemm gesummv' \
+  NPBENCH_FRAMEWORKS='numba dace_cpu dace_gpu cupy' \
+  bash run_large.sh baselines "$collection_dir/controls-before" > "$collection_dir/controls-before.log" 2>&1
+before_status=$?
+bash run_large.sh all "$collection_dir/main" > "$collection_dir/main.log" 2>&1
+main_status=$?
+NPBENCH_CASES_FILE="$collection_dir/controls.tsv" NPBENCH_BENCHMARKS='gemm gesummv' \
+  NPBENCH_FRAMEWORKS='numba dace_cpu dace_gpu cupy' \
+  bash run_large.sh baselines "$collection_dir/controls-after" > "$collection_dir/controls-after.log" 2>&1
+after_status=$?
+printf 'controls_before=%s main=%s controls_after=%s\n' "$before_status" "$main_status" "$after_status" > "$collection_dir/exit-summary.txt"
+echo "$collection_dir"
+```
+
+Review control hot samples and variability before comparing the main results.
+Monitoring errors or gaps leave occupancy unverified; identify external PIDs using worker records and invalidate affected cells.
+Record invalidation and selective reruns rather than mixing interrupted samples into accepted statistics.
+A collection's nonzero exit is retained even though the post-controls still run; review its failed cells separately.
+These commands do not run the separate cold/resource supplements.

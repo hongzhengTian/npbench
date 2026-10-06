@@ -163,7 +163,9 @@ def load(root):
 def comparison_key(contract, device):
     common = dict(contract.get('comparison_contract', {}))
     if not common: return 'legacy:' + str(contract.get('npbench_revision'))
-    if device == 'cpu': common.pop('gpu', None)
+    if device == 'cpu':
+        common.pop('gpu', None)
+        common.pop('gpu_numa_binding', None)
     return hashlib.sha256(json.dumps(common, sort_keys=True).encode()).hexdigest()
 
 
@@ -213,7 +215,12 @@ def analyze(bundles, *, replace_cova=False):
         if any(r.get('resource_observation', {}).get('probe_error') for r in rows): warnings.append('resource_probe_error')
         launched = [r['launch_resources']['affinity'] for r in rows if r.get('launch_resources', {}).get('affinity')]
         if not launched: warnings.append('missing_worker_launch_resources')
-        if launched and any(cpus != contract.get('affinity') for cpus in launched):
+        worker_plan = contract.get('gpu_numa_binding', {}).get('worker_plans', {}).get(cell['framework'], {})
+        expected_affinity = worker_plan.get('allowed_cpus', contract.get('affinity'))
+        outside_node = worker_plan.get('status') == 'bound' and any(
+            set(cpus) - set(expected_affinity)
+            for row in rows for cpus in row.get('resource_observation', {}).get('thread_affinities', {}).values())
+        if outside_node or (launched and any(cpus != expected_affinity for cpus in launched)):
             warnings.append('worker_allocation_mismatch')
             eligible = dict.fromkeys(PHASES, 'excluded_resource_mismatch')
         observed_gpu = [r['resource_observation']['gpu'].get('uuid') for r in rows if r.get('resource_observation', {}).get('gpu')]

@@ -137,3 +137,6 @@ dmypy.json
 
 # Dated scalar result snapshots are maintained evidence.
 !heatmap/**/*.csv
+
+# Isolated validation outputs; existing benchmark caches stay untouched.
+validation-runs/

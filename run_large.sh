@@ -12,7 +12,8 @@ Usage: ./run_large.sh [--plan] [all|baselines|cova] [RESULT_DIRECTORY]
        ./run_large.sh --export RESULT_DIRECTORY EVIDENCE_DIRECTORY
 Activate the prepared CoVA/NPBench environment before running this script.
 Defaults: all non-optional benchmarks, L, 3 processes x 3 calls (9 total),
-all allocated CPU resources with native runtime defaults, visible GPU 0,
+all allocated CPUs for CPU routes, GPU-local NUMA CPUs for GPU workers,
+native runtime defaults, visible GPU 0,
 1800s per complete worker/golden. Existing goldens required.
 --plan freezes and checks configuration without executing benchmarks.
 --cold makes 3 independent empty-artifact collections, one call per cell.
@@ -28,6 +29,7 @@ Optional environment:
   NPBENCH_GOLDEN_CACHE       persistent golden directory (default .cache/goldens)
   NPBENCH_RESOURCE_POLICY   system (default) or fixed (diagnostics only)
   NPBENCH_THREADS           CPU thread budget for fixed mode (default 2)
+  NPBENCH_GPU_NUMA_BINDING  auto (default): bind GPU workers to local NUMA CPUs; off: inherited affinity
   NPBENCH_CPUSET            taskset CPU list for fixed mode only
   NPBENCH_EXPECT_CPUS       expected allocated logical CPU count (system: all online by default)
   NPBENCH_BENCHMARKS        space-separated subset (default every bench_info entry)
@@ -122,6 +124,7 @@ mode="${1:-all}"
 case "$mode" in all|baselines|cova) ;; *) echo 'Expected all, baselines, or cova' >&2; exit 2;; esac
 repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 python="${NPBENCH_PYTHON:-python}"
+export NPBENCH_GPU_NUMA_BINDING="${NPBENCH_GPU_NUMA_BINDING:-auto}"
 export NPBENCH_RESOURCE_POLICY="${NPBENCH_RESOURCE_POLICY:-system}"
 export NPBENCH_MEASUREMENT_ROLE="${NPBENCH_MEASUREMENT_ROLE:-main}"
 export NPBENCH_REQUIRE_GOLDEN="${NPBENCH_REQUIRE_GOLDEN:-1}"
@@ -146,7 +149,8 @@ fi
 out="$(realpath -m -- "${2:-$repo/.cache/large-runs/$(date -u +%Y%m%dT%H%M%SZ)-$mode}")"
 mkdir -p "$repo/.cache" "$out"
 # One script at a time per checkout, even when result directories differ.
-exec 9>"$repo/.cache/large-run.lock"
+# NFS exclusive locks need a writable descriptor; <> never truncates it.
+exec 9<>"$repo/.cache/large-run.lock"
 flock -n 9 || { echo 'Another run_large.sh is active in this checkout' >&2; exit 3; }
 
 # Freeze the plan and the environment used for resume checks. Existing result
@@ -156,7 +160,7 @@ freeze_collection() {
 import hashlib, importlib.metadata, json, os, pathlib, shlex, subprocess, sys
 from npbench.infrastructure import Benchmark, generate_framework
 from npbench.infrastructure.lifecycle import METRIC_VERSION, PROTOCOL_VERSION, VALIDATION_CONTRACT
-from npbench.infrastructure.resources import allocation_snapshot, gpu_identity, idle_observation, monitor_environment
+from npbench.infrastructure.resources import allocation_snapshot, gpu_identity, idle_observation, monitor_environment, gpu_numa_plan, gpu_numa_option
 repo, out = map(pathlib.Path, sys.argv[1:3]); mode = sys.argv[3]
 def capture(command):
     try:
@@ -251,6 +255,7 @@ contract = {'mode': mode, 'benchmarks': benchmarks, 'frameworks': frameworks,
             'affinity': sorted(os.sched_getaffinity(0)), 'gpu': gpu,
             'allocation': allocation_snapshot(),
             'nvcc': capture(['nvcc', '--version'])}
+contract['gpu_numa_binding'] = {'policy': gpu_numa_option(), 'worker_plans': {name: gpu_numa_plan(name) for name in frameworks}}
 contract['toolchain'] = {name: capture(shlex.split(os.environ.get(variable, default)) + ['--version'])
     for name,variable,default in [('cc','CC','cc'), ('cxx','CXX','c++'), ('cuda_host','CUDAHOSTCXX','c++'), ('cmake','NPBENCH_CMAKE','cmake')]}
 contract['toolchain']['nvcc'] = contract['nvcc']
@@ -298,6 +303,7 @@ contract['comparison_contract']['environment'] = {k:v for k,v in environment.ite
     ('OMP_', 'OPENBLAS_', 'MKL_', 'NUMBA_', 'DACE_', 'CUDA', 'CUPY_')) and 'CACHE' not in k}
 contract['comparison_contract']['library_environment'] = {k:environment.get(k) for k in
     ('LD_LIBRARY_PATH', 'LIBRARY_PATH', 'CPATH', 'CMAKE_PREFIX_PATH', 'CC', 'CXX', 'CUDAHOSTCXX')}
+contract['comparison_contract']['gpu_numa_binding'] = contract['gpu_numa_binding']
 contract['comparison_contract']['resource_policy'] = os.environ.get('NPBENCH_RESOURCE_POLICY', 'system')
 path = out/'collection.json'
 if path.exists():
@@ -349,7 +355,7 @@ summary = {'benchmark_count': len(benchmarks), 'implementation_cells': cells,
            'calls_per_complete_cell': (fresh+1)*(repeat+1), 'initialization': 1,
            'fresh_process': fresh, 'same_process': (fresh+1)*repeat,
            'resource_policy': os.environ.get('NPBENCH_RESOURCE_POLICY', 'system'),
-           'cpu_affinity': contract['affinity'], 'role': contract['measurement_role'],
+           'cpu_affinity': contract['affinity'], 'gpu_numa_binding': contract['gpu_numa_binding'], 'role': contract['measurement_role'],
            'golden_required': os.environ.get('NPBENCH_REQUIRE_GOLDEN', '1') == '1',
            'worker_timeout_seconds': int(os.environ['NPBENCH_TIMEOUT'])}
 (out/'plan-summary.json').write_text(json.dumps(summary, indent=2)+'\n')

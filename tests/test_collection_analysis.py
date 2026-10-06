@@ -23,6 +23,27 @@ def fixture(framework='numpy',repeat=2,fresh=2):
 
 
 class AnalysisTest(unittest.TestCase):
+    def test_binding_policy_changes_gpu_comparison_only(self):
+        auto={'comparison_contract':{'gpu_numa_binding':{'policy':'auto'},'cpu':'same'}}
+        off={'comparison_contract':{'gpu_numa_binding':{'policy':'off'},'cpu':'same'}}
+        self.assertEqual(a.comparison_key(auto,'cpu'),a.comparison_key(off,'cpu'))
+        self.assertNotEqual(a.comparison_key(auto,'gpu'),a.comparison_key(off,'gpu'))
+
+    def test_gpu_bound_affinity_is_checked_against_frozen_plan(self):
+        b=fixture('cupy');b['contract']['gpu_numa_binding']={'worker_plans':{'cupy':{'allowed_cpus':[1]}}}
+        rows=b['cells'][0]['records']
+        for row in rows: row['launch_resources']['affinity']=[1]
+        table=a.analyze([b])[0]
+        self.assertNotIn('worker_allocation_mismatch', table[0]['resource_review'])
+        rows[0]['launch_resources']['affinity']=[0]
+        table=a.analyze([b])[0]
+        self.assertIn('worker_allocation_mismatch', table[0]['resource_review'])
+        rows[0]['launch_resources']['affinity']=[1]
+        b['contract']['gpu_numa_binding']['worker_plans']['cupy']['status']='bound'
+        rows[0]['resource_observation']={'thread_affinities':{'1':[0,1]}}
+        self.assertIn('worker_allocation_mismatch', a.analyze([b])[0][0]['resource_review'])
+
+
     def test_protocol6_pass_without_required_cache_evidence_is_invalid(self):
         b=fixture('numba'); cell=b['cells'][0]
         cell['manifest']['protocol_version']=6
