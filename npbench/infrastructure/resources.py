@@ -222,9 +222,9 @@ def parse_cpu_list(value):
 
 def gpu_numa_option(environment=None):
     environment = os.environ if environment is None else environment
-    value = environment.get('NPBENCH_GPU_NUMA_BINDING', 'auto')
-    if value not in ('auto', 'off'):
-        raise ValueError('NPBENCH_GPU_NUMA_BINDING must be auto or off')
+    value = environment.get('NPBENCH_GPU_NUMA_BINDING', 'cpu-memory')
+    if value not in ('off', 'cpu', 'cpu-memory'):
+        raise ValueError('NPBENCH_GPU_NUMA_BINDING must be off, cpu or cpu-memory')
     return value
 
 
@@ -245,7 +245,7 @@ def gpu_numa_plan(framework, *, allowed=None, sysfs=Path('/sys'), environment=No
     allowed = sorted(os.sched_getaffinity(0) if allowed is None else allowed)
     result = {'policy': policy, 'status': 'unbound', 'allowed_cpus': allowed,
               'parent_allowed_cpus': allowed, 'cuda_visible_devices': environment.get('CUDA_VISIBLE_DEVICES'),
-              'cuda_logical_device': 0, 'memory_policy': 'unchanged'}
+              'cuda_logical_device': 0, 'memory_policy': 'unchanged', 'memory_nodes': []}
     if framework not in GPU_NUMA_FRAMEWORKS or policy == 'off':
         result['reason'] = 'cpu_route' if framework not in GPU_NUMA_FRAMEWORKS else 'disabled'
         return result
@@ -258,23 +258,50 @@ def gpu_numa_plan(framework, *, allowed=None, sysfs=Path('/sys'), environment=No
         if node < 0:
             result['reason'] = 'unknown_numa_node'
             return result
+        if len(parse_cpu_list((sysfs / 'devices/system/node/online').read_text())) <= 1:
+            result['reason'] = 'single_numa_node'
+            return result
         cpus = parse_cpu_list((device / 'local_cpulist').read_text())
         result['local_cpus'] = cpus
         effective = sorted(set(cpus) & set(allowed))
         if not effective:
             result['reason'] = 'no_local_cpus_in_allocation'
             return result
+        if policy == 'cpu-memory':
+            result.update(memory_policy='bind', memory_nodes=[node])
         result.update(status='bound', allowed_cpus=effective, reason='gpu_local_cpus')
     except (OSError, RuntimeError, ValueError, ImportError) as error:
         result['reason'] = type(error).__name__ + ': ' + str(error)
     return result
 
 
-def worker_launch_command(command, plan):
-    """Apply affinity before Python and numerical libraries initialize."""
+def worker_launch_command(command, plan, request_path=None):
+    """Launch a standard-library-only script before importing the worker package."""
     if plan['status'] == 'bound':
-        return ['taskset', '--cpu-list', ','.join(map(str, plan['allowed_cpus'])), *command]
+        if request_path is None:
+            raise ValueError('Bound workers require a placement result request')
+        import sys
+        return [sys.executable, str(Path(__file__).with_name('gpu_numa_launcher.py')), str(request_path), *command]
     return command
+
+
+def numa_page_summary(path=Path('/proc/self/numa_maps')):
+    """Node counts in base pages; separate anonymous VMAs from cached files."""
+    result = {'pages_by_node': {}, 'anonymous_pages_by_node': {}, 'file_pages_by_node': {}}
+    try:
+        for line in path.read_text().splitlines():
+            fields = line.split()
+            category = 'file_pages_by_node' if any(x.startswith('file=') for x in fields) else 'anonymous_pages_by_node'
+            for field in fields:
+                name, sep, value = field.partition('=')
+                if sep and name.startswith('N') and name[1:].isdigit():
+                    for key in ('pages_by_node', category):
+                        counts = result[key]
+                        counts[name[1:]] = counts.get(name[1:], 0) + int(value)
+        result['page_size_bytes'] = os.sysconf('SC_PAGE_SIZE')
+    except (OSError, ValueError) as error:
+        result['error'] = str(error)
+    return result
 
 
 def check_worker_affinity(resources, plan):

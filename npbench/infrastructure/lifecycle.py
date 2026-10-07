@@ -71,17 +71,27 @@ def _append(path, record):
 def worker(request_path):
     request = json.loads(Path(request_path).read_text())
     root = Path.cwd()
+    binding = request.get('gpu_numa_binding', {})
+    if request.get('gpu_numa_result') and Path(request['gpu_numa_result']).exists():
+        binding = json.loads(Path(request['gpu_numa_result']).read_text())
     worker_started = time.perf_counter()
     from .resources import process_resources
     launch_resources = process_resources()
     from .resources import check_worker_affinity, configured_threadpools
     launch_resources['threadpools'] = configured_threadpools()
     event = {}
-    launch_resources['gpu_numa_binding'] = request.get('gpu_numa_binding')
+    launch_resources['gpu_numa_binding'] = binding
     try:
         stage = 'worker_affinity'
-        if request.get('gpu_numa_binding', {}).get('status') == 'bound':
-            check_worker_affinity(launch_resources, request['gpu_numa_binding'])
+        if binding.get('status') == 'bound' and not binding.get('launcher_verified'):
+            raise ValueError('Missing verified launcher placement result')
+        if binding.get('memory_policy') == 'bind':
+            from .gpu_numa_launcher import memory_policy
+            launch_resources['memory_policy'] = memory_policy()
+        if binding.get('status') == 'bound':
+            check_worker_affinity(launch_resources, binding)
+            if binding.get('memory_policy') == 'bind' and launch_resources['memory_policy'] != {'mode': 2, 'nodes': binding['memory_nodes']}:
+                raise ValueError('Worker memory policy did not survive exec')
         stage = 'load_benchmark'
         bench = Benchmark(request['benchmark'])
         numpy = generate_framework('numpy')
@@ -140,13 +150,15 @@ def worker(request_path):
             if probe_cpu:
                 from .resources import thread_cpu_snapshot, thread_cpu_activity
                 cpu_before = thread_cpu_snapshot()
-            from .resources import cpu_position, maintain_worker_affinity
-            record['affinity_repairs_before'] = maintain_worker_affinity(request.get('gpu_numa_binding', {}))
+            from .resources import cpu_position, maintain_worker_affinity, numa_page_summary
+            record['affinity_repairs_before'] = maintain_worker_affinity(binding)
             record['cpu_before_call'] = cpu_position()
+            record['numa_pages_before_call'] = numa_page_summary()
             started = time.perf_counter()
             result = region(data)
             record['time'] = time.perf_counter() - started
-            record['affinity_repairs_after'] = maintain_worker_affinity(request.get('gpu_numa_binding', {}))
+            record['numa_pages_after_call'] = numa_page_summary()
+            record['affinity_repairs_after'] = maintain_worker_affinity(binding)
             record['cpu_after_call'] = cpu_position()
             if probe_cpu:
                 record['thread_cpu_activity'] = thread_cpu_activity(cpu_before, thread_cpu_snapshot())
@@ -298,11 +310,12 @@ def _run(args):
                        'preset': args['preset'], 'repeat': args['repeat'], 'process_index': process_index,
                        'validate': args['validate'], 'golden_cache': str(cache), 'golden_sha256': event['sha256'], 'version': version,
                        'samples_file': samples_file, 'implementation_sources': manifest['implementation_sources'],
-                       'expected_artifacts': expected_artifacts, 'gpu_numa_binding': numa_plan}
+                       'expected_artifacts': expected_artifacts, 'gpu_numa_binding': numa_plan,
+                       'gpu_numa_result': str(cell / (stem + '.placement.json'))}
             request_path = cell / (stem + '.request.json')
             request_path.write_text(json.dumps(request))
             command = [sys.executable, '-m', 'npbench.infrastructure.lifecycle', '--worker', str(request_path)]
-            command = worker_launch_command(command, numa_plan)
+            command = worker_launch_command(command, numa_plan, request_path)
             (cell / 'current-call.json').unlink(missing_ok=True)
             started = time.monotonic()
             timed_out = False
@@ -340,7 +353,9 @@ def _run(args):
             manifest['processes'].append({'implementation': label, 'index': process_index,
                                           'exit_code': process.returncode, 'timed_out': timed_out,
                                           'worker_wall_seconds': time.monotonic() - started,
-                                          'samples': str((cell / samples_file).relative_to(run_root))})
+                                          'samples': str((cell / samples_file).relative_to(run_root)),
+                                          'gpu_numa_binding': json.loads(Path(request['gpu_numa_result']).read_text())
+                                          if Path(request['gpu_numa_result']).exists() else numa_plan})
             manifest_file.write_text(json.dumps(manifest, indent=2) + '\n')
             print(label, stem, 'exit', process.returncode, flush=True)
             if process.returncode == 0 and records and all(r['status'] == 'passed' for r in records):

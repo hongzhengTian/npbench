@@ -12,7 +12,7 @@ Usage: ./run_large.sh [--plan] [all|baselines|cova] [RESULT_DIRECTORY]
        ./run_large.sh --export RESULT_DIRECTORY EVIDENCE_DIRECTORY
 Activate the prepared CoVA/NPBench environment before running this script.
 Defaults: all non-optional benchmarks, L, 3 processes x 3 calls (9 total),
-all allocated CPUs for CPU routes, GPU-local NUMA CPUs for GPU workers,
+all allocated CPUs for CPU routes, GPU-local NUMA CPUs and memory for GPU workers,
 native runtime defaults, visible GPU 0,
 1800s per complete worker/golden. Existing goldens required.
 --plan freezes and checks configuration without executing benchmarks.
@@ -29,7 +29,7 @@ Optional environment:
   NPBENCH_GOLDEN_CACHE       persistent golden directory (default .cache/goldens)
   NPBENCH_RESOURCE_POLICY   system (default) or fixed (diagnostics only)
   NPBENCH_THREADS           CPU thread budget for fixed mode (default 2)
-  NPBENCH_GPU_NUMA_BINDING  auto (default): bind GPU workers to local NUMA CPUs; off: inherited affinity
+  NPBENCH_GPU_NUMA_BINDING  cpu-memory (default): bind GPU CPUs and memory; cpu: CPUs only; off: inherited
   NPBENCH_CPUSET            taskset CPU list for fixed mode only
   NPBENCH_EXPECT_CPUS       expected allocated logical CPU count (system: all online by default)
   NPBENCH_BENCHMARKS        space-separated subset (default every bench_info entry)
@@ -124,7 +124,7 @@ mode="${1:-all}"
 case "$mode" in all|baselines|cova) ;; *) echo 'Expected all, baselines, or cova' >&2; exit 2;; esac
 repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 python="${NPBENCH_PYTHON:-python}"
-export NPBENCH_GPU_NUMA_BINDING="${NPBENCH_GPU_NUMA_BINDING:-auto}"
+export NPBENCH_GPU_NUMA_BINDING="${NPBENCH_GPU_NUMA_BINDING:-cpu-memory}"
 export NPBENCH_RESOURCE_POLICY="${NPBENCH_RESOURCE_POLICY:-system}"
 export NPBENCH_MEASUREMENT_ROLE="${NPBENCH_MEASUREMENT_ROLE:-main}"
 export NPBENCH_REQUIRE_GOLDEN="${NPBENCH_REQUIRE_GOLDEN:-1}"

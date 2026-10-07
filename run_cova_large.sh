@@ -12,7 +12,8 @@ Currently: 324 main cells (4 corrected-ADI routes are missing_source) plus
 7 helper cells; 57 registration names, not 57
 independent workloads. Original helper-target implementations remain included.
 Strict validation, 3 processes x 3 calls, sequentially on system resources.
-All allocated CPUs are available; native runtimes choose threads/placement.
+CPU routes use all allocated CPUs; GPU routes use the selected NUMA policy.
+Native runtimes choose their own thread counts.
 One visible GPU is used. Other optional repairs and other systems are excluded.
 Existing canonical goldens are required; no reference producer is executed.
 
@@ -30,6 +31,7 @@ The LLVM prebuild is selected from the CoVA build's CMakeCache.txt.
 
 Allowed controls:
   CUDA_VISIBLE_DEVICES       one GPU, default 0
+  NPBENCH_GPU_NUMA_BINDING    off|cpu|cpu-memory, default cpu-memory
   NPBENCH_TIMEOUT            whole-worker seconds, default 1800
   NPBENCH_GOLDEN_TIMEOUT     golden integrity-check seconds, default 1800
   NPBENCH_GOLDEN_CACHE       default this checkout's .cache/goldens

@@ -223,6 +223,11 @@ def analyze(bundles, *, replace_cova=False):
         if outside_node or (launched and any(cpus != expected_affinity for cpus in launched)):
             warnings.append('worker_allocation_mismatch')
             eligible = dict.fromkeys(PHASES, 'excluded_resource_mismatch')
+        if worker_plan.get('memory_policy') == 'bind' and any(
+                row.get('launch_resources', {}).get('memory_policy') !=
+                {'mode': 2, 'nodes': worker_plan.get('memory_nodes', [])} for row in rows):
+            warnings.append('worker_memory_policy_mismatch')
+            eligible = dict.fromkeys(PHASES, 'excluded_resource_mismatch')
         observed_gpu = [r['resource_observation']['gpu'].get('uuid') for r in rows if r.get('resource_observation', {}).get('gpu')]
         if device == 'gpu' and not observed_gpu: warnings.append('missing_worker_gpu_identity')
         if observed_gpu and any(uuid != (contract.get('gpu') or {}).get('uuid') for uuid in observed_gpu):
@@ -260,7 +265,10 @@ def analyze(bundles, *, replace_cova=False):
             # confirmation is inferred from a lack of dispersion flags.
             resource_limits = ['no_interval_isolation_evidence']
             numa = contract.get('allocation', {}).get('numa_policy')
-            if not numa or str(numa).startswith('unavailable'):
+            verified_memory_binding = worker_plan.get('memory_policy') == 'bind' and bool(rows) and all(
+                row.get('launch_resources', {}).get('memory_policy') == {'mode': 2, 'nodes': worker_plan.get('memory_nodes', [])}
+                for row in rows)
+            if not verified_memory_binding and (not numa or str(numa).startswith('unavailable')):
                 resource_limits.append('numa_policy_unverified')
             row = dict(base, phase=phase, eligibility=qualification, observed_samples=len(observed),
                        numba_reuse_evidence=numba_reuse_evidence(cell['framework'], phase, rows),

@@ -24,7 +24,7 @@ def fixture(framework='numpy',repeat=2,fresh=2):
 
 class AnalysisTest(unittest.TestCase):
     def test_binding_policy_changes_gpu_comparison_only(self):
-        auto={'comparison_contract':{'gpu_numa_binding':{'policy':'auto'},'cpu':'same'}}
+        auto={'comparison_contract':{'gpu_numa_binding':{'policy':'cpu-memory'},'cpu':'same'}}
         off={'comparison_contract':{'gpu_numa_binding':{'policy':'off'},'cpu':'same'}}
         self.assertEqual(a.comparison_key(auto,'cpu'),a.comparison_key(off,'cpu'))
         self.assertNotEqual(a.comparison_key(auto,'gpu'),a.comparison_key(off,'gpu'))
@@ -43,6 +43,17 @@ class AnalysisTest(unittest.TestCase):
         rows[0]['resource_observation']={'thread_affinities':{'1':[0,1]}}
         self.assertIn('worker_allocation_mismatch', a.analyze([b])[0][0]['resource_review'])
 
+
+    def test_frozen_memory_policy_requires_actual_worker_policy(self):
+        b=fixture('cupy')
+        b['contract']['gpu_numa_binding']={'worker_plans':{'cupy':{'allowed_cpus':[0],'memory_policy':'bind','memory_nodes':[1]}}}
+        rows=b['cells'][0]['records']
+        for row in rows:row['launch_resources']['memory_policy']={'mode':2,'nodes':[1]}
+        self.assertNotIn('worker_memory_policy_mismatch',a.analyze([b])[0][0]['resource_review'])
+        rows[0]['launch_resources']['memory_policy']={'mode':0,'nodes':[]}
+        result=a.analyze([b])[0][0]
+        self.assertIn('worker_memory_policy_mismatch',result['resource_review'])
+        self.assertEqual(result['eligibility'],'excluded_resource_mismatch')
 
     def test_protocol6_pass_without_required_cache_evidence_is_invalid(self):
         b=fixture('numba'); cell=b['cells'][0]
