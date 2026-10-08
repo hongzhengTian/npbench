@@ -98,6 +98,7 @@ def extract(run, output):
     dump(output / 'summary.json', dict(collection_id=run.name, raw_cells=len(cells),
          exit_counts=dict(Counter(str(c['exit_code']) for c in cells)),
          source_version=collection['cova_revision'], resource_policy='system',
+         host=collection.get('host'), gpu_numa_binding=collection['environment'].get('NPBENCH_GPU_NUMA_BINDING', 'off'),
          metric='host-to-host; median of process medians; phases separate',
          qualification='reference_only; GPU placement metadata is not an independent trace'))
     print(json.dumps({'cells': len(cells), 'output':str(output)}))

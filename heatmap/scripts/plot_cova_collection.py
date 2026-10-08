@@ -17,6 +17,8 @@ from matplotlib.colors import LogNorm
 def build_payload(baseline, evidence):
     entries = json.loads(gzip.decompress((evidence / 'cells.json.gz').read_bytes()))
     summary = json.loads((evidence / 'summary.json').read_text())
+    if baseline.get('host') and summary.get('host'):
+        assert baseline['host'] == summary['host'], 'Cross-host absolute times cannot be merged'
     registered = {(e['benchmark'], e['framework']): e for e in entries}
     references = {c['benchmark']: c for c in baseline['cells'] if c['framework']=='numpy' and c['phase']=='initialization'}
     cells = []
@@ -33,6 +35,7 @@ def build_payload(baseline, evidence):
             golden = entry.get('golden', {})
             metadata = dict(source_benchmark=source, source_version=entry.get('framework_version', summary['source_version']),
                 selected_source=summary['collection_id'], source_files=entry['source_files'],
+                gpu_numa_binding=summary.get('gpu_numa_binding', 'unknown') if framework.endswith('_gpu') else 'off', host=summary.get('host'),
                 golden_key=golden.get('key'), golden_sha256=golden.get('sha256'),
                 reported_devices=devices, primary_gpu_verified=False, historical=False, profiled=False,
                 repaired=str(source in HELPERS or benchmark=='adi_corrected'),
@@ -53,6 +56,8 @@ def build_payload(baseline, evidence):
     payload.update(dataset_id=summary['collection_id']+'-with-frozen-baseline',
         baseline_dataset_id=baseline['dataset_id'], columns=baseline['columns']+COVA_COLUMNS,
         cells=baseline['cells']+cells, cova_source_version=summary['source_version'],
+        cova_gpu_numa_binding=summary.get('gpu_numa_binding', 'unknown'),
+        baseline_gpu_numa_binding=baseline.get('gpu_numa_binding', 'unknown'),
         cova_evidence_sha256=hashlib.sha256((evidence/'cells.json.gz').read_bytes()).hexdigest(),
         selection_owner='heatmap/scripts/plot_cova_collection.py; one complete collection; explicit helper substitution',
         caveats=['Baseline cells unchanged, not rerun; no synchronized ranking.',
@@ -76,18 +81,18 @@ def main():
     verification['baseline_json_sha256']=hashlib.sha256(a.baseline.read_bytes()).hexdigest()
     a.output.mkdir(parents=True,exist_ok=True)
     groups=[(0,0,'NumPy | CPU'),(1,6,'Numba | CPU'),(7,9,'DaCe | CPU'),(10,12,'DaCe | GPU'),(13,13,'CuPy | GPU'),(14,17,'CoVA | CPU routes'),(18,19,'CoVA | GPU routes')]
-    notes=['Original 14 baseline columns unchanged. Only CoVA is replaced by this complete L collection.',
-           'Strict 3 processes x 3 calls per successful CoVA cell; system resources, CPU 0-95 offered, one A100X.',
+    notes=['Frozen 14 competitor columns. cpu-memory binds GPU workers to their GPU CPU/memory node; off leaves them unbound.',
+           f"CoVA GPU NUMA policy: {payload['cova_gpu_numa_binding']}; competitor GPU NUMA policy: {payload['baseline_gpu_numa_binding']}. Same host, different collection conditions.",
            'CPU: requested GPU route reported host-only execution. GPU?: placement metadata without independent primary-device trace.',
            '* Reference/restricted observation; no synchronized ranking. Dagger: corrected formula or helper with matching golden.',
-           'Failed cells have no timing; no historical success fallback. Four corrected ADI routes remain missing_source.',
+           'Failed cells have no timing; no historical success fallback. Explicit corrected ADI and workload repairs keep matching goldens.',
            'Host-to-host calls. Input reset and validation excluded. Hot values: median of process medians.',
            'Competitor versions and sampling conditions remain historical; small cross-collection differences are not causal speedups.',
            'Data and scalar provenance: baseline_with_cova_heatmaps_data.json']
     for phase in PHASES:
         render(a.output,phase,payload['benchmarks'],payload['cells'],LogNorm(*payload['shared_log_scale_seconds']),payload,
                columns=payload['columns'],groups=groups,title='Baseline + CoVA full collection',
-               subtitle=f"{payload['dataset_id']} | CoVA {str(payload['cova_source_version'])[:8]} | baseline unchanged",notes=notes,filename_prefix='baseline_with_cova')
+               subtitle=f"{payload['dataset_id']} | CoVA {str(payload['cova_source_version'])[:8]} | frozen baseline {payload['baseline_dataset_id']}",notes=notes,filename_prefix='baseline_with_cova')
     (a.output/'baseline_with_cova_heatmaps_data.json').write_text(json.dumps(payload,indent=2,allow_nan=False)+'\n')
     (a.output/'baseline_with_cova_verification.json').write_text(json.dumps(verification,indent=2)+'\n')
     fields=['benchmark','framework','implementation','phase','state','seconds','source_benchmark','source_version','samples','processes','golden_key','golden_sha256','reported_devices','restriction_reasons']

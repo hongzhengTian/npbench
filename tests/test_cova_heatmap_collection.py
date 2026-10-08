@@ -42,4 +42,21 @@ class CollectionTests(unittest.TestCase):
             (root/'summary.json').write_text(json.dumps(dict(source_version='fixture',collection_id='fixture')))
             with self.assertRaises(AssertionError):build_payload(baseline,root)
 
+    def test_host_identity_and_binding_provenance(self):
+        baseline=dict(dataset_id='fixture',host='same',gpu_numa_binding='off',
+            benchmarks=['compute'],columns=[],cells=[dict(benchmark='compute',framework='numpy',phase='initialization',seconds=1.,golden_key='k',golden_sha256='h')])
+        entries=[dict(benchmark='compute',framework=fw,exit_code=125,rows=[],source_files=[]) for fw,_,_ in COVA_COLUMNS]
+        with tempfile.TemporaryDirectory() as name:
+            root=Path(name)
+            (root/'cells.json.gz').write_bytes(gzip.compress(json.dumps(entries).encode()))
+            summary=dict(source_version='fixture',collection_id='fixture',host='same',gpu_numa_binding='cpu-memory')
+            (root/'summary.json').write_text(json.dumps(summary))
+            result=build_payload(baseline,root)
+            self.assertEqual(result['cova_gpu_numa_binding'],'cpu-memory')
+            self.assertEqual(result['baseline_gpu_numa_binding'],'off')
+            self.assertTrue(all(c['gpu_numa_binding']==('cpu-memory' if c['framework'].endswith('_gpu') else 'off') for c in result['cells'][1:]))
+            summary['host']='different'
+            (root/'summary.json').write_text(json.dumps(summary))
+            with self.assertRaises(AssertionError):build_payload(baseline,root)
+
 if __name__=='__main__':unittest.main()
