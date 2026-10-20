@@ -7,7 +7,7 @@
   {
     "original": "baseline_heatmaps_data.json",
     "destination": "heatmap/2026-09-17/baseline_heatmaps_data.json",
-    "sha256": "c1a126c7ba8487f3d7e6258ad19f86061b43a8bdcb108f27489eb39267e81340"
+    "sha256": "9728e308e397e878f9312ecd440af1c1f70195af54231fa8623d59468df22dde"
   },
   {
     "original": "baseline_initialization_heatmap.png",
@@ -27,7 +27,7 @@
   {
     "original": "baseline_with_cova_heatmaps_data.json",
     "destination": "heatmap/2026-09-22/baseline_with_cova_heatmaps_data.json",
-    "sha256": "e4da4e53fed1ece5925b14d42520670bba5f67b172b31e9aeafb224397452e7b"
+    "sha256": "e46230dd263426ff4b43843bd9395354f8d064fc3c9c2078af6022973a49ff8c"
   },
   {
     "original": "baseline_with_cova_initialization_heatmap.png",
@@ -37,7 +37,7 @@
   {
     "original": "baseline_with_cova_notes.md",
     "destination": "heatmap/2026-09-22/baseline_with_cova_notes.md",
-    "sha256": "4ff7201001427d8ba4e2829e449efd4f1e082be4ba82651d415bf8381ce7f1e0"
+    "sha256": "36b836d53082006c18b8f34f0b8f550b5a82de1d7963350f2256aada63d58dcf"
   },
   {
     "original": "baseline_with_cova_results.csv",
@@ -52,6 +52,6 @@
   {
     "original": "baseline_with_cova_verification.json",
     "destination": "heatmap/2026-09-22/baseline_with_cova_verification.json",
-    "sha256": "00fdbc3f9f90f80766352a5a60f12092e38ffb0eac06d8e5b69190a1fe2d2826"
+    "sha256": "cad8f98bba07faf0c1a0350569e7417d56f7d9026a498c62000a7035e3af2018"
   }
 ]

@@ -10,7 +10,7 @@ CPU表示请求GPU路线报告仅主机执行；GPU?表示元数据没有独立�
 失败没有历史成功兜底，ADI只匹配adi_corrected。
 
 相对09-25无新增功能失败，但有四项≥10×及十项2–10×热调用变慢，不能只看目标收益推断全矩阵无回退。
-分析见Research `notebook/01-research/cova/reports/2026-09-26-compute-stencil-access-storage-performance.md` 的全量复核补充。
+分析见前身报告 `raw://cova/2026-10-20-predecessor-archive/notes.tar.gz#notebook/01-research/cova/reports/2026-09-26-compute-stencil-access-storage-performance.md` 的全量复核补充。
 独立证据为同一reports下 `evidence/2026-09-27-npbench-cova-L/`。
 
 在NPBench根目录使用已有Python/matplotlib环境重绘，只读证据，不运行benchmark：
@@ -18,6 +18,6 @@ CPU表示请求GPU路线报告仅主机执行；GPU?表示元数据没有独立�
 ```bash
 python heatmap/scripts/plot_cova_collection.py \
   --baseline heatmap/2026-09-17/baseline_heatmaps_data.json \
-  --evidence /HSC/users/tianhong/myHome/myResearchLife/notebook/01-research/cova/reports/evidence/2026-09-27-npbench-cova-L \
+  --evidence <unpacked step-evidence directory>/2026-09-27-npbench-cova-L \
   --output heatmap/2026-09-26
 ```

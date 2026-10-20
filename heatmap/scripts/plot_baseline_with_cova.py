@@ -265,7 +265,7 @@ def verify_merge(payload, baseline):
 def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument('--baseline', type=Path, required=True)
-    parser.add_argument('--evidence-root', type=Path, required=True, help='Research reports/evidence directory')
+    parser.add_argument('--evidence-root', type=Path, required=True, help='unpacked predecessor evidence directory (raw://cova/2026-10-20-predecessor-archive/step-evidence.tar.gz)')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     payload = build_payload(args.baseline, args.evidence_root)

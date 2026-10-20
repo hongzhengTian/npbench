@@ -9,13 +9,13 @@ CoVA `f929db7f`，集合`cova-L-20260928-201630`；原始331单元291严格通�
 热调用按进程等权中位数，初始化/fresh分开；L、system、严格3×3、golden零重算，ADI仅corrected。
 
 相对09-25：50项热时间下降≥20%（26项≥2×加速），41项上升≥20%（12项≥2×变慢），无≥10×回退；不是因果或显著性检验。
-报告与精炼证据在Research `notebook/01-research/cova/reports/2026-09-26-compute-stencil-access-storage-performance.md` 和同级`evidence/2026-09-29-npbench-cova-L/`。
+报告与精炼证据在前身报告 `raw://cova/2026-10-20-predecessor-archive/notes.tar.gz#notebook/01-research/cova/reports/2026-09-26-compute-stencil-access-storage-performance.md` 和 `raw://cova/2026-10-20-predecessor-archive/step-evidence.tar.gz#2026-09-29-npbench-cova-L`。
 
 NPBench根目录重绘（不运行benchmark）：
 
 ```bash
 python heatmap/scripts/plot_cova_collection.py \
   --baseline heatmap/2026-09-17/baseline_heatmaps_data.json \
-  --evidence /HSC/users/tianhong/myHome/myResearchLife/notebook/01-research/cova/reports/evidence/2026-09-29-npbench-cova-L \
+  --evidence <unpacked step-evidence directory>/2026-09-29-npbench-cova-L \
   --output heatmap/2026-09-28
 ```

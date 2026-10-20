@@ -1,6 +1,6 @@
 {
   "dataset_id": "npbench-L-final-results-20260917-v2-repairs-with-cova-reference",
-  "evidence": "/HSC/users/tianhong/myHome/myResearchLife/notebook/01-research/cova/reports/evidence/2026-09-17-npbench-final-results-v2",
+  "evidence": "raw://cova/2026-10-20-predecessor-archive/step-evidence.tar.gz#2026-09-17-npbench-final-results-v2",
   "input_sha256": {
     "final-results.csv": "1f310161fdf36ff57bc94dff0247fbdca602c62e03c8a28f44d5f2636578d322",
     "summary.json": "b0d773ea5fe5df3b52508e137e85fc08fe595dbe011ba2248fdae7da352c1c38"
@@ -124517,8 +124517,8 @@
   ],
   "selection_owner": "scripts/plot_baseline_with_cova.py; chronological whole-cell overrides, no best-time selection",
   "baseline_dataset_id": "npbench-L-final-results-20260917-v2-repairs",
-  "baseline_json_sha256": "c1a126c7ba8487f3d7e6258ad19f86061b43a8bdcb108f27489eb39267e81340",
-  "cova_evidence_root": "/HSC/users/tianhong/myHome/myResearchLife/notebook/01-research/cova/reports/evidence",
+  "baseline_json_sha256": "9728e308e397e878f9312ecd440af1c1f70195af54231fa8623d59468df22dde",
+  "cova_evidence_root": "raw://cova/2026-10-20-predecessor-archive/step-evidence.tar.gz",
   "cova_source_sha256": {
     "2026-09-21-npbench-cova-L/cells/index.json": "fe773fc5d170ff470aa44308e2abb328fa16cb63c64363724e7ee8de417331b5",
     "2026-09-21-npbench-cova-L/cells/arc_distance/cova_llvm_cpu/process-0.jsonl.gz": "1e32b037a9428ef0e49352e241d1ef088111908e269c7731ba9ea341ff4fd19d",

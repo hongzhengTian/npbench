@@ -3,9 +3,12 @@
 全量运行及后续明确标注的增量更新，其三张heatmap和总JSON按日期保存。
 日期是批次标识，不表示所有历史对照组都在当天运行。
 
+来源中的 `raw://` 地址指向 [research-lab](https://github.com/hongzhengTian/research-lab) 的原始层：`#` 之前是压缩包，之后是包内路径。
+2026-10-20 起，各快照记录的证据位置都改写为这种地址，记录中的文件哈希随之更新；测量数值与图没有改动。
+
 | 目录 | 内容 |
 | --- | --- |
-| [2026-09-17](2026-09-17/baseline_heatmaps_data.json) | 原14条对照路线，保留原始JSON和三张图，字节不变。 |
+| [2026-09-17](2026-09-17/baseline_heatmaps_data.json) | 原14条对照路线，保留原始JSON和三张图；除 2026-10-20 改写的来源路径外内容不变。 |
 | [2026-09-22](2026-09-22/baseline_with_cova_heatmaps_data.json) | 原先根目录的合并视图：历史全量CoVA、覆盖闭合及最后azimint专项观测，混合版本。 |
 | [2026-09-24](2026-09-24/baseline_with_cova_heatmaps_data.json) | 09-24启动、09-25完成的CoVA完整L矩阵；只替换CoVA六列，原对照组不变。 |
 | [2026-09-25](2026-09-25/baseline_with_cova_heatmaps_data.json) | 09-24底稿加九个修复目标单元的严格3×3复测；混合版本增量视图，其他单元不变。 |
@@ -38,7 +41,7 @@ python -m unittest discover -s tests -p 'test_cova_heatmap*.py' -v
 提取器面向当前完整L、3进程×3调用协议，多次attempt不会自动选择最快一批，而是要求显式整理。
 先保留每个注册单元的精炼标量、身份、失败、artifact摘要和资源，再用该独立证据渲染。
 绘图必须使用同机、冻结的14列baseline JSON，不能把已合并JSON作为baseline再追加CoVA。
-重新生成最新图使用 Research 证据 `notebook/01-research/cova/reports/evidence/2026-10-07-npbench-heatmap` 的 baseline_heatmaps_data.json 和 cova/。
+重新生成最新图使用前身证据 `raw://cova/2026-10-07-stage-a-closing-fullrun/legacy-evidence.tar.gz#2026-10-07-npbench-heatmap` 的 baseline_heatmaps_data.json 和 cova/。
 新快照保留完整JSON和三张PNG，不归档数组、native二进制或编译缓存。
 
 旧绘图入口已移动至 `heatmap/scripts/plot_baseline_heatmaps.py` 和 `heatmap/scripts/plot_baseline_with_cova.py`。
@@ -61,4 +64,4 @@ python heatmap/scripts/extract_baseline_collection.py \
 ```
 
 绘图器在双方均有 host 身份时拒绝跨机器合并，并保留 GPU NUMA 策略到 JSON 和图注。
-新图的完整命令保存在 Research 新证据目录的 tools/generate.sh。
+新图的完整命令保存在上述证据目录的 `tools/generate.sh`。

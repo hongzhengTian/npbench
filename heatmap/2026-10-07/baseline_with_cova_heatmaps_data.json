@@ -2,10 +2,10 @@
   "dataset_id": "20261007T065121Z-cova-L-7eb28298-cpu-memory-with-frozen-baseline",
   "evidence": "extracted scalar collections",
   "input_sha256": {
-    "/HSC/users/tianhong/myHome/myResearchLife/notebook/01-research/cova/reports/evidence/2026-10-02-hsc12-full-baseline/data/hsc12-baselines/cells.json.gz": "e63daeee6272faded4dbc16c07d2e3015f32fab2fe93989babeca844a57c1288",
-    "/HSC/users/tianhong/myHome/myResearchLife/notebook/01-research/cova/reports/evidence/2026-10-02-hsc12-full-baseline/data/hsc12-baselines/collection.json.gz": "4701dba22f270adad89b253468a6d01dc2a0aa8bfb2fee402b503d49e0cc3817",
-    "/HSC/users/tianhong/myHome/myResearchLife/notebook/01-research/cova/reports/evidence/2026-10-02-hsc12-full-baseline/data/hsc12-repairs/cells.json.gz": "898eb28bf0867a58ae9fb1076d09afae000ea24b10872735abfa1a1a2e7f639c",
-    "/HSC/users/tianhong/myHome/myResearchLife/notebook/01-research/cova/reports/evidence/2026-10-02-hsc12-full-baseline/data/hsc12-repairs/collection.json.gz": "755538a46c65cb9302ed02b0580be54ca28b3d439efb3704511b0cd4c0300f8b"
+    "raw://cova/2026-10-02-stage-a-start-baseline/legacy-evidence.tar.gz#data/hsc12-baselines/cells.json.gz": "e63daeee6272faded4dbc16c07d2e3015f32fab2fe93989babeca844a57c1288",
+    "raw://cova/2026-10-02-stage-a-start-baseline/legacy-evidence.tar.gz#data/hsc12-baselines/collection.json.gz": "4701dba22f270adad89b253468a6d01dc2a0aa8bfb2fee402b503d49e0cc3817",
+    "raw://cova/2026-10-02-stage-a-start-baseline/legacy-evidence.tar.gz#data/hsc12-repairs/cells.json.gz": "898eb28bf0867a58ae9fb1076d09afae000ea24b10872735abfa1a1a2e7f639c",
+    "raw://cova/2026-10-02-stage-a-start-baseline/legacy-evidence.tar.gz#data/hsc12-repairs/collection.json.gz": "755538a46c65cb9302ed02b0580be54ca28b3d439efb3704511b0cd4c0300f8b"
   },
   "benchmarks": [
     "adi_corrected",

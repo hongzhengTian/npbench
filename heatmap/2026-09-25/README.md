@@ -6,7 +6,7 @@
 其余 3213 个格子逐字段保持不变，其中包括全部 2268 个对照组格子。
 这是混合版本的增量视图，不是 3ec3dae8 的全矩阵重新认证，也不是同期性能排名。
 
-更新样本来自 Research 长期证据 `notebook/01-research/cova/reports/evidence/2026-09-25-regression-repairs/records/targets/candidate`。
+更新样本来自前身证据 `raw://cova/2026-10-20-predecessor-archive/step-evidence.tar.gz#2026-09-25-regression-repairs/records/targets/candidate`。
 测量时为 316658e2 加未提交补丁，现已提交为 CoVA 3ec3dae8；归档中每个修改文件的 SHA256 已与提交后的源码核对一致。
 总 JSON 保留原始测量基线、补丁 SHA256、提交身份、各进程输入/golden 身份及证据文件哈希。
 每单元严格三进程 × 三调用，L、system、CPU affinity 0–95、同一 GPU，无 profiler。

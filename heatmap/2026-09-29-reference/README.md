@@ -40,7 +40,7 @@ helper保持显式映射，ADI只使用adi_corrected及匹配golden。
 
 总JSON逐格保存日期、证据索引、输入及当前产物摘要、全部标量样本和进程中位数；`overlay_previous_cells`完整保存被替换格的原记录。
 未复核单元仍可能受全量运行时的环境影响，不能将当前参考图解读为全矩阵性能无回退。
-完整归因说明见Research长期报告`notebook/01-research/cova/reports/2026-09-26-compute-stencil-access-storage-performance.md`及同级`evidence/2026-09-29-regression-attribution/`。
+完整归因说明见前身长期报告`raw://cova/2026-10-20-predecessor-archive/notes.tar.gz#notebook/01-research/cova/reports/2026-09-26-compute-stencil-access-storage-performance.md`及 `raw://cova/2026-10-20-predecessor-archive/step-evidence.tar.gz#2026-09-29-regression-attribution`。
 本目录只含图、文本和标量记录，不含数组、编译缓存或native二进制。
 
 ## 重绘（NPBench根目录，不执行benchmark）

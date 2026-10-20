@@ -45,5 +45,5 @@ GPU 列的 CPU/GPU? 仍是原 placement 资格标记，mixed 不等于 CPU 回�
 
 全部 324 个 CoVA hot 格的时间和有值/失败状态与绑定全量 `derived/cova-bound.json.gz` 一致。
 报告的通用 failed 状态在图中按 error、validation、missing 细分，失败都没有计时。
-输入、命令、测试及 hash 在 Research 的 `notebook/01-research/cova/reports/evidence/2026-10-07-npbench-heatmap/`。
+输入、命令、测试及 hash 在 `raw://cova/2026-10-07-stage-a-closing-fullrun/legacy-evidence.tar.gz#2026-10-07-npbench-heatmap`。
 heatmap 相关单元测试 13 项通过，原始对照 hash 与合并审计通过；未替换指标。

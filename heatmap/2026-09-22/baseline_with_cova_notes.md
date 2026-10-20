@@ -51,12 +51,12 @@ No raw input arrays, native binaries or profiler files are copied into these out
 
 ## Reproduction
 
-From the NPBench root, with Python, matplotlib and the Research evidence checkout available:
+From the NPBench root, with Python, matplotlib and the predecessor evidence unpacked from raw://cova/2026-10-20-predecessor-archive/step-evidence.tar.gz:
 
 ```bash
 python scripts/plot_baseline_with_cova.py \
   --baseline baseline_heatmaps_data.json \
-  --evidence-root /HSC/users/tianhong/myHome/myResearchLife/notebook/01-research/cova/reports/evidence \
+  --evidence-root <unpacked step-evidence directory> \
   --output .
 python -m unittest discover -s tests -p test_cova_heatmap_selection.py -v
 ```
